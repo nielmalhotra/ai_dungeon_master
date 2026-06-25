@@ -3,6 +3,11 @@ set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 ENV_FILE="${ROOT_DIR}/.production.env"
+PYTHON_BIN="${ROOT_DIR}/.venv/bin/python"
+
+if [[ ! -x "${PYTHON_BIN}" ]]; then
+  PYTHON_BIN="$(command -v python3)"
+fi
 
 if [[ ! -f "${ENV_FILE}" ]]; then
   echo "Missing ${ENV_FILE}" >&2
@@ -10,7 +15,7 @@ if [[ ! -f "${ENV_FILE}" ]]; then
 fi
 
 echo "Checking for model changes without migrations..."
-python manage.py makemigrations --check --dry-run
+"${PYTHON_BIN}" "${ROOT_DIR}/manage.py" makemigrations --check --dry-run
 
 set -a
 source "${ENV_FILE}"

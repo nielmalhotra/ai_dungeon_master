@@ -1,0 +1,248 @@
+{% load socialaccount %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AI Dungeon Master</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f6f3ed;
+      --ink: #191711;
+      --muted: #6f695f;
+      --line: #d8d0c3;
+      --panel: #fffaf1;
+      --accent: #8f2f24;
+      --accent-strong: #5e1d18;
+      --field: #eee8dc;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background:
+        linear-gradient(180deg, rgba(246, 243, 237, 0.94), rgba(235, 227, 214, 0.96)),
+        url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='120' height='120' viewBox='0 0 120 120'%3E%3Cpath d='M0 119h120M119 0v120' fill='none' stroke='%23d8d0c3' stroke-opacity='.45'/%3E%3C/svg%3E");
+      color: var(--ink);
+      font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .shell {
+      width: min(960px, calc(100% - 32px));
+      min-height: 100vh;
+      margin: 0 auto;
+      display: grid;
+      grid-template-rows: auto 1fr;
+    }
+
+    header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 24px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    h1 {
+      margin: 0;
+      font-size: clamp(1.7rem, 3vw, 2.4rem);
+      font-weight: 800;
+      letter-spacing: 0;
+    }
+
+    .account {
+      color: var(--muted);
+      font-size: 0.95rem;
+      text-align: right;
+    }
+
+    main {
+      display: grid;
+      align-items: center;
+      padding: 32px 0;
+    }
+
+    .login-panel,
+    .chat-panel {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: rgba(255, 250, 241, 0.9);
+      box-shadow: 0 18px 45px rgba(54, 42, 28, 0.12);
+    }
+
+    .login-panel {
+      max-width: 520px;
+      margin: 0 auto;
+      padding: 32px;
+      text-align: center;
+    }
+
+    .login-panel h2,
+    .chat-panel h2 {
+      margin: 0 0 10px;
+      font-size: 1.2rem;
+      letter-spacing: 0;
+    }
+
+    .login-panel p,
+    .empty-state p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      min-height: 44px;
+      margin-top: 24px;
+      padding: 0 18px;
+      border: 0;
+      border-radius: 6px;
+      background: var(--accent);
+      color: #fff;
+      font: inherit;
+      font-weight: 700;
+      text-decoration: none;
+      cursor: pointer;
+    }
+
+    .button:hover {
+      background: var(--accent-strong);
+    }
+
+    .button.secondary {
+      min-height: 36px;
+      margin-top: 0;
+      padding: 0 12px;
+      background: transparent;
+      color: var(--accent);
+      border: 1px solid var(--line);
+    }
+
+    .chat-panel {
+      min-height: min(680px, calc(100vh - 160px));
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      overflow: hidden;
+    }
+
+    .chat-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .chat-log {
+      min-height: 340px;
+      padding: 20px;
+      display: grid;
+      align-content: center;
+    }
+
+    .empty-state {
+      max-width: 520px;
+      margin: 0 auto;
+      text-align: center;
+    }
+
+    .composer {
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      padding: 16px;
+      border-top: 1px solid var(--line);
+      background: rgba(246, 243, 237, 0.75);
+    }
+
+    textarea {
+      width: 100%;
+      min-height: 48px;
+      max-height: 140px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 13px 14px;
+      background: var(--field);
+      color: var(--muted);
+      font: inherit;
+    }
+
+    textarea:disabled,
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.7;
+    }
+
+    @media (max-width: 640px) {
+      header,
+      .chat-header,
+      .composer {
+        align-items: stretch;
+        flex-direction: column;
+      }
+
+      .account {
+        text-align: left;
+      }
+
+      .composer {
+        grid-template-columns: 1fr;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="shell">
+    <header>
+      <h1>AI Dungeon Master</h1>
+      {% if request.user.is_authenticated %}
+        <div class="account">{{ request.user.email|default:request.user.username }}</div>
+      {% endif %}
+    </header>
+
+    <main>
+      {% if request.user.is_authenticated %}
+        <section class="chat-panel" aria-labelledby="chat-title">
+          <div class="chat-header">
+            <div>
+              <h2 id="chat-title">Adventure</h2>
+            </div>
+            <form method="post" action="{% url 'account_logout' %}">
+              {% csrf_token %}
+              <button class="button secondary" type="submit">Log out</button>
+            </form>
+          </div>
+          <div class="chat-log">
+            <div class="empty-state">
+              <h2>The road waits.</h2>
+              <p>The chat interface is ready. The dungeon master will begin speaking here once the game loop is connected.</p>
+            </div>
+          </div>
+          <form class="composer">
+            <textarea disabled placeholder="Type your action..."></textarea>
+            <button class="button" type="submit" disabled>Send</button>
+          </form>
+        </section>
+      {% else %}
+        <section class="login-panel" aria-labelledby="login-title">
+          <h2 id="login-title">Log in with Google OAuth</h2>
+          <p>Use your Google account to begin your adventure.</p>
+          <a class="button" href="{% provider_login_url 'google' %}">Log in with Google</a>
+        </section>
+      {% endif %}
+    </main>
+  </div>
+</body>
+</html>
