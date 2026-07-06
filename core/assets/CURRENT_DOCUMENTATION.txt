@@ -1,0 +1,214 @@
+AI DUNGEON MASTER RULESET
+
+AUTHORITY
+
+This is the complete ruleset. Standard fifth-edition mechanics do not apply
+unless they are explicitly included here. Unsupported mechanics, such as bonus
+actions or death saves, have no effect.
+
+The AI interprets actions and narrates results. Rules code validates actions,
+updates state, and applies mechanics. The AI must use the dice tool for every
+random roll and cannot invent roll results.
+
+CHARACTERS
+
+The game supports three player characters selected from five prebuilt
+characters. Characters do not have levels.
+
+The five available classes are:
+
+Warrior - Specializes in Strength. Excels at melee combat, breaking, lifting,
+          pushing, and other displays of physical power.
+Rogue   - Specializes in Dexterity. Excels at stealth, precision, locks, traps,
+          theft, and agile movement.
+Wizard  - Specializes in Intelligence. Excels at knowledge, investigation,
+          magical analysis, and spellcasting.
+Druid   - Specializes in Wisdom. Excels at perception, survival, intuition,
+          nature magic, and healing.
+Bard    - Specializes in Charisma. Excels at persuasion, deception,
+          performance, and social influence.
+
+SIMPLIFIED CHARACTER SHEET
+
+Identity records the character's name and class.
+
+Combat statistics record current and maximum HP, AC, and the Initiative
+modifier.
+
+Attributes record the character's modifiers for Strength, Dexterity,
+Constitution, Intelligence, Wisdom, and Charisma.
+
+Trained skills identify the checks that receive the character's +2 trained
+skill bonus. Strong saves list the character's best saving throw modifiers.
+
+Attacks list the attack's name, attack bonus, damage, and range. Abilities list
+their target, range, required roll, effect, and usage limit.
+
+Gear records carried weapons, armor, tools, consumable items, and gold.
+Conditions, current HP, ability uses, inventory quantities, and location are
+dynamic state and must remain current throughout the adventure.
+
+Every character begins with a Phoenix of Invincibility and a War-Hating God's
+Bow in addition to class-specific gear.
+
+Each character has a name, class, HP, AC, Initiative modifier, attributes,
+trained skills, strong saves, attacks, abilities, gear, conditions, and an
+independent location.
+
+The six attributes are Strength, Dexterity, Constitution, Intelligence,
+Wisdom, and Charisma.
+
+The trained skills are Athletics, Stealth, Sleight of Hand, Knowledge,
+Investigation, Perception, Survival, Insight, Persuasion, Deception,
+Intimidation, and Performance. A trained skill adds +2 when applicable.
+
+Attacks list an attack bonus, damage, and range. Abilities define their target,
+range, roll, effect, and usage limit.
+
+CORE ROLLS
+
+A standard roll is d20 plus applicable modifiers. A roll succeeds when its
+total is greater than or equal to its target. Natural 1s and natural 20s have
+no special effect.
+
+Ability check: d20 + attribute + 2 if a trained skill applies.
+
+Suggested difficulty classes:
+
+10 - Easy
+12 - Moderate
+15 - Hard
+18 - Very hard
+
+Attack: d20 + attack bonus against AC. On success, roll damage.
+
+Saving throw: d20 + save modifier against the effect's DC.
+
+Contest: both sides roll with relevant modifiers. The higher total wins. Ties
+are rerolled by the dice tool.
+
+Initiative: every combatant rolls d20 + Initiative modifier. The highest total
+acts first. Tied combatants reroll until the tie is resolved.
+
+ADVANTAGE AND DISADVANTAGE
+
+Every applicable source of advantage contributes +1. Every applicable source
+of disadvantage contributes -1. Add all sources before rolling.
+
+A positive result rolls that many additional d20s and takes the highest. A
+negative result rolls that many additional d20s and takes the lowest. A total
+of zero uses one d20. Ordinary modifiers are added after selecting the d20.
+
+Example: two advantages and one disadvantage produce one advantage, so the
+character rolls 2d20 and takes the higher result.
+
+ACTIONS
+
+Each turn permits movement plus one action. Actions are Attack, Defend, Use
+Ability, Use Item, Interact, or Improvise.
+
+Defend gives attacks against the character disadvantage until that character's
+next turn.
+
+Interactions may be automatic or require a check. Improvised actions become a
+check, attack, saving throw, contest, automatic success, or automatic failure.
+Obviously successful actions require no roll. Impossible actions automatically
+fail without a roll.
+
+If a clear action fails a precondition, that character's action is consumed and
+the other characters' actions continue resolving. The narration may remind the
+player of information the characters already know, but cannot reveal hidden
+information.
+
+If a character is assigned multiple actions or the intended legal action is
+ambiguous, the entire party command pauses. No dice are rolled and no state is
+changed until the player clarifies the command.
+
+MOVEMENT AND LOCATION
+
+Distance uses three bands: ENGAGED, NEAR, and FAR. Normal movement changes
+distance by one band. Melee attacks require ENGAGED. Ranged attacks normally
+work at NEAR or FAR. Ranged attacks made while ENGAGED have disadvantage.
+Leaving ENGAGED does not trigger an opportunity attack.
+
+Each character has an independent location. Actions affect only the character's
+current location, and characters can interact only with perceptible targets.
+Characters at the same location form a scene group. Movement can join or split
+scene groups.
+
+NPCs and characters observe only events they can perceive at their location.
+Characters do not automatically share information learned while separated.
+Combat includes only creatures present at that location.
+
+CONDITIONS
+
+Prone: The character can only crawl, has disadvantage on attacks, and ENGAGED
+attackers have advantage against the character.
+
+Restrained: Movement is zero, attacks against the character have advantage,
+the character's attacks have disadvantage, and Dexterity saving throws have
+disadvantage.
+
+Stunned: The character is incapacitated, cannot act or move, can speak only
+falteringly, automatically fails Strength and Dexterity saving throws, and
+attacks against the character have advantage.
+
+Exhausted: All ability checks have disadvantage, and changing one distance band
+consumes the character's action.
+
+Prone, Restrained, and Stunned expire after the affected character completes
+two turns. A complete noncombat turn spent resting removes all conditions,
+including Exhausted.
+
+HEALTH AND RECOVERY
+
+Damage reduces HP. Healing cannot raise HP above maximum HP. At zero HP, a
+character dies.
+
+Every character possesses a Phoenix of Invincibility. Death immediately
+triggers the Phoenix, restores the character to maximum HP, removes all
+conditions, and records a resurrection event.
+
+A normal rest requires one complete noncombat turn of doing nothing and removes
+conditions. Sleeping, including taking a nap or staying at an inn, restores
+maximum HP and all limited-use abilities.
+
+WAR-HATING GOD'S BOW
+
+Every character possesses a War-Hating God's Bow. Using it consumes the
+character's action. Its target must exist and be perceptible to the character.
+The bow requires no attack or damage roll. It ignores AC, HP, advantage,
+disadvantage, and defensive abilities. It always hits and kills its target.
+
+PARTY COMMANDS
+
+The player submits one message containing actions for all three characters.
+Each character may perform at most one action. A character omitted from the
+command does nothing.
+
+Outside combat, the AI determines a causal resolution order and accounts for
+interactions among actions. During combat, actions resolve in initiative order.
+One submitted party command advances one global turn across every location.
+
+If an action targets someone who is not perceptible at the character's location,
+the action fails its precondition. The AI does not silently move or teleport the
+character. A movement plus an action is valid only when the requested movement
+can be completed within the character's movement allowance.
+
+GAME LOOP
+
+1. The DM describes the current scenes and perceptible facts.
+2. The player submits the party command.
+3. The AI identifies each character's intention, dependencies, targets, and
+   required resolution.
+4. Invalid or ambiguous multi-action commands pause for clarification.
+5. The dice tool performs required rolls.
+6. Rules code resolves outcomes and updates authoritative state.
+7. The AI narrates only the validated results.
+8. The process repeats.
+
+Authoritative state includes HP, conditions, inventory, locations,
+relationships, NPC knowledge, discovered clues, world objects, combat state,
+and pending clarifications.
+
+Combat ends when one side dies, flees, surrenders, or completes its objective.

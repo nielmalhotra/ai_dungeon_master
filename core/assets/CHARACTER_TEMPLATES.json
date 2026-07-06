@@ -1,0 +1,354 @@
+{
+  "warrior": {
+    "class": "Warrior",
+    "specialty": "strength",
+    "theme": "A veteran protector who approaches problems directly.",
+    "hp": {"current": 24, "maximum": 24},
+    "ac": 15,
+    "initiative_modifier": 1,
+    "attributes": {
+      "strength": 3,
+      "dexterity": 1,
+      "constitution": 2,
+      "intelligence": 0,
+      "wisdom": 1,
+      "charisma": 0
+    },
+    "trained_skills": ["athletics", "intimidation", "perception", "survival"],
+    "strong_saves": {"strength": 5, "constitution": 4},
+    "attacks": [
+      {
+        "key": "longsword",
+        "name": "Longsword",
+        "attack_bonus": 5,
+        "damage": {"dice_count": 1, "dice_sides": 8, "modifier": 3},
+        "range": ["ENGAGED"]
+      },
+      {
+        "key": "javelin",
+        "name": "Javelin",
+        "attack_bonus": 3,
+        "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 3},
+        "range": ["NEAR", "FAR"]
+      }
+    ],
+    "abilities": [
+      {
+        "key": "second_wind",
+        "name": "Second Wind",
+        "explanation": "Catch your breath and restore 1d8+2 HP to yourself. You can use this once before sleeping.",
+        "target": "self",
+        "resolution": {"type": "automatic"},
+        "effect": {
+          "type": "heal",
+          "amount": {"dice_count": 1, "dice_sides": 8, "modifier": 2}
+        },
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      },
+      {
+        "key": "shield_bash",
+        "name": "Shield Bash",
+        "explanation": "Bash an ENGAGED creature with your shield. Win a Strength contest to make the target Prone for two turns.",
+        "target": "one_perceptible_creature",
+        "range": ["ENGAGED"],
+        "resolution": {
+          "type": "contest",
+          "actor_attribute": "strength",
+          "target_attribute": "strength"
+        },
+        "effect": {"type": "condition", "condition": "prone", "turns": 2},
+        "uses": null
+      }
+    ],
+    "gear": [
+      {"key": "longsword", "name": "Longsword", "quantity": 1},
+      {"key": "shield", "name": "Shield", "quantity": 1},
+      {"key": "javelin", "name": "Javelin", "quantity": 3},
+      {"key": "rope", "name": "Rope", "quantity": 1},
+      {"key": "torch", "name": "Torch", "quantity": 1},
+      {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+    ],
+    "conditions": [],
+    "location": null
+  },
+  "rogue": {
+    "class": "Rogue",
+    "specialty": "dexterity",
+    "theme": "An observant infiltrator who prefers clever solutions and misdirection.",
+    "hp": {"current": 18, "maximum": 18},
+    "ac": 14,
+    "initiative_modifier": 3,
+    "attributes": {
+      "strength": 0,
+      "dexterity": 3,
+      "constitution": 1,
+      "intelligence": 2,
+      "wisdom": 1,
+      "charisma": 0
+    },
+    "trained_skills": ["stealth", "sleight_of_hand", "investigation", "deception"],
+    "strong_saves": {"dexterity": 5, "intelligence": 4},
+    "attacks": [
+      {
+        "key": "dagger",
+        "name": "Dagger",
+        "attack_bonus": 5,
+        "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 3},
+        "range": ["ENGAGED"]
+      },
+      {
+        "key": "shortbow",
+        "name": "Shortbow",
+        "attack_bonus": 5,
+        "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 3},
+        "range": ["NEAR", "FAR"]
+      }
+    ],
+    "abilities": [
+      {
+        "key": "exploit_opening",
+        "name": "Exploit Opening",
+        "explanation": "Once per turn, deal an extra 1d6 damage when your attack has net advantage.",
+        "activation": "passive",
+        "trigger": "attack_with_net_advantage",
+        "effect": {
+          "type": "bonus_damage",
+          "amount": {"dice_count": 1, "dice_sides": 6, "modifier": 0}
+        },
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "turn"}
+      },
+      {
+        "key": "smoke_bomb",
+        "name": "Smoke Bomb",
+        "explanation": "Fill the area around you with smoke. Attacks against you have one source of disadvantage until your next turn. You can use this once before sleeping.",
+        "target": "self",
+        "resolution": {"type": "automatic"},
+        "effect": {
+          "type": "attacks_against_disadvantage",
+          "sources": 1,
+          "duration": "until_next_turn"
+        },
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      }
+    ],
+    "gear": [
+      {"key": "dagger", "name": "Dagger", "quantity": 2},
+      {"key": "shortbow", "name": "Shortbow", "quantity": 1},
+      {"key": "thieves_tools", "name": "Thieves' Tools", "quantity": 1},
+      {"key": "smoke_bomb_kit", "name": "Smoke Bomb Kit", "quantity": 1},
+      {"key": "grappling_hook", "name": "Grappling Hook", "quantity": 1},
+      {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+    ],
+    "conditions": [],
+    "location": null
+  },
+  "wizard": {
+    "class": "Wizard",
+    "specialty": "intelligence",
+    "theme": "An obsessive scholar fascinated by magic, history, and unexplained phenomena.",
+    "hp": {"current": 16, "maximum": 16},
+    "ac": 11,
+    "initiative_modifier": 1,
+    "attributes": {
+      "strength": 0,
+      "dexterity": 1,
+      "constitution": 1,
+      "intelligence": 3,
+      "wisdom": 2,
+      "charisma": 0
+    },
+    "trained_skills": ["knowledge", "investigation", "insight", "perception"],
+    "strong_saves": {"intelligence": 5, "wisdom": 4},
+    "attacks": [
+      {
+        "key": "staff",
+        "name": "Staff",
+        "attack_bonus": 2,
+        "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 0},
+        "range": ["ENGAGED"]
+      },
+      {
+        "key": "fire_bolt",
+        "name": "Fire Bolt",
+        "attack_bonus": 5,
+        "damage": {"dice_count": 1, "dice_sides": 8, "modifier": 0},
+        "damage_type": "fire",
+        "range": ["NEAR", "FAR"]
+      }
+    ],
+    "abilities": [
+      {
+        "key": "arcane_snare",
+        "name": "Arcane Snare",
+        "explanation": "Conjure a magical snare around one NEAR creature. It must pass a DC 13 Strength save or become Restrained for two turns. You can use this once before sleeping.",
+        "target": "one_perceptible_creature",
+        "range": ["NEAR"],
+        "resolution": {"type": "saving_throw", "save": "strength", "dc": 13},
+        "effect": {"type": "condition", "condition": "restrained", "turns": 2},
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      },
+      {
+        "key": "force_ward",
+        "name": "Force Ward",
+        "explanation": "Protect yourself or a NEAR ally with magical force. Attacks against the protected character have one source of disadvantage until your next turn. You can use this once before sleeping.",
+        "target": "one_perceptible_character",
+        "range": ["ENGAGED", "NEAR"],
+        "resolution": {"type": "automatic"},
+        "effect": {
+          "type": "attacks_against_disadvantage",
+          "sources": 1,
+          "duration": "until_casters_next_turn"
+        },
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      }
+    ],
+    "gear": [
+      {"key": "staff", "name": "Staff", "quantity": 1},
+      {"key": "spellbook", "name": "Spellbook", "quantity": 1},
+      {"key": "lantern", "name": "Lantern", "quantity": 1},
+      {"key": "chalk", "name": "Chalk", "quantity": 5},
+      {"key": "magnifying_lens", "name": "Magnifying Lens", "quantity": 1},
+      {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+    ],
+    "conditions": [],
+    "location": null
+  },
+  "druid": {
+    "class": "Druid",
+    "specialty": "wisdom",
+    "theme": "A patient naturalist who understands animals, plants, healing, and danger.",
+    "hp": {"current": 20, "maximum": 20},
+    "ac": 13,
+    "initiative_modifier": 1,
+    "attributes": {
+      "strength": 0,
+      "dexterity": 1,
+      "constitution": 2,
+      "intelligence": 1,
+      "wisdom": 3,
+      "charisma": 0
+    },
+    "trained_skills": ["perception", "survival", "insight", "knowledge"],
+    "strong_saves": {"wisdom": 5, "constitution": 4},
+    "attacks": [
+      {
+        "key": "staff",
+        "name": "Staff",
+        "attack_bonus": 2,
+        "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 0},
+        "range": ["ENGAGED"]
+      },
+      {
+        "key": "thorn_lash",
+        "name": "Thorn Lash",
+        "attack_bonus": 5,
+        "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 0},
+        "range": ["NEAR"]
+      }
+    ],
+    "abilities": [
+      {
+        "key": "healing_bloom",
+        "name": "Healing Bloom",
+        "explanation": "Restore 1d8+3 HP to yourself or a NEAR ally. You can use this once before sleeping.",
+        "target": "one_perceptible_character",
+        "range": ["ENGAGED", "NEAR"],
+        "resolution": {"type": "automatic"},
+        "effect": {
+          "type": "heal",
+          "amount": {"dice_count": 1, "dice_sides": 8, "modifier": 3}
+        },
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      },
+      {
+        "key": "entangling_roots",
+        "name": "Entangling Roots",
+        "explanation": "Summon roots around one NEAR creature. It must pass a DC 13 Dexterity save or become Restrained for two turns. You can use this once before sleeping.",
+        "target": "one_perceptible_creature",
+        "range": ["NEAR"],
+        "resolution": {"type": "saving_throw", "save": "dexterity", "dc": 13},
+        "effect": {"type": "condition", "condition": "restrained", "turns": 2},
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      }
+    ],
+    "gear": [
+      {"key": "staff", "name": "Staff", "quantity": 1},
+      {"key": "herbal_kit", "name": "Herbal Kit", "quantity": 1},
+      {"key": "bedroll", "name": "Bedroll", "quantity": 1},
+      {"key": "waterskin", "name": "Waterskin", "quantity": 1},
+      {"key": "animal_treats", "name": "Animal Treats", "quantity": 5},
+      {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+    ],
+    "conditions": [],
+    "location": null
+  },
+  "bard": {
+    "class": "Bard",
+    "specialty": "charisma",
+    "theme": "A charming performer who manipulates attention, confidence, and social situations.",
+    "hp": {"current": 18, "maximum": 18},
+    "ac": 13,
+    "initiative_modifier": 2,
+    "attributes": {
+      "strength": 0,
+      "dexterity": 2,
+      "constitution": 1,
+      "intelligence": 1,
+      "wisdom": 0,
+      "charisma": 3
+    },
+    "trained_skills": ["persuasion", "deception", "performance", "insight"],
+    "strong_saves": {"charisma": 5, "dexterity": 4},
+    "attacks": [
+      {
+        "key": "rapier",
+        "name": "Rapier",
+        "attack_bonus": 4,
+        "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 2},
+        "range": ["ENGAGED"]
+      },
+      {
+        "key": "vicious_verse",
+        "name": "Vicious Verse",
+        "attack_bonus": 5,
+        "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 0},
+        "range": ["NEAR", "FAR"]
+      }
+    ],
+    "abilities": [
+      {
+        "key": "inspiring_song",
+        "name": "Inspiring Song",
+        "explanation": "Encourage one ally who can perceive you, giving them one source of advantage on their next roll. You can use this once before sleeping.",
+        "target": "one_perceptible_ally",
+        "resolution": {"type": "automatic"},
+        "effect": {"type": "next_roll_advantage", "sources": 1},
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      },
+      {
+        "key": "cutting_words",
+        "name": "Cutting Words",
+        "explanation": "Distract one enemy who can perceive you, giving them one source of disadvantage on their next roll. You can use this once before sleeping.",
+        "target": "one_perceptible_enemy",
+        "resolution": {"type": "automatic"},
+        "effect": {"type": "next_roll_disadvantage", "sources": 1},
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      }
+    ],
+    "gear": [
+      {"key": "rapier", "name": "Rapier", "quantity": 1},
+      {"key": "lute", "name": "Lute", "quantity": 1},
+      {"key": "disguise_kit", "name": "Disguise Kit", "quantity": 1},
+      {"key": "fine_clothes", "name": "Fine Clothes", "quantity": 1},
+      {"key": "notebook", "name": "Notebook", "quantity": 1},
+      {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+    ],
+    "conditions": [],
+    "location": null
+  }
+}

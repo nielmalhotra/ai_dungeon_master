@@ -69,6 +69,7 @@
     }
 
     .login-panel,
+    .setup-panel,
     .chat-panel {
       width: 100%;
       border: 1px solid var(--line);
@@ -85,6 +86,7 @@
     }
 
     .login-panel h2,
+    .setup-panel h2,
     .chat-panel h2 {
       margin: 0 0 10px;
       font-size: 1.2rem;
@@ -92,6 +94,7 @@
     }
 
     .login-panel p,
+    .setup-panel p,
     .empty-state p {
       margin: 0;
       color: var(--muted);
@@ -126,6 +129,360 @@
       background: transparent;
       color: var(--accent);
       border: 1px solid var(--line);
+    }
+
+    .button.danger {
+      min-height: 36px;
+      margin-top: 0;
+      padding: 0 12px;
+      background: #a62920;
+      color: #fff;
+    }
+
+    .button.danger:hover {
+      background: #741d18;
+    }
+
+    .header-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .setup-panel {
+      max-width: 760px;
+      margin: 0 auto;
+      overflow: hidden;
+    }
+
+    .setup-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 18px 20px;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .setup-body {
+      padding: 20px;
+    }
+
+    .rules-notice {
+      margin-bottom: 20px;
+      padding: 12px 14px;
+      border-left: 4px solid var(--accent);
+      background: var(--field);
+      color: var(--ink);
+      line-height: 1.5;
+    }
+
+    .selection-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 12px;
+    }
+
+    .selection-heading h3 {
+      margin: 0;
+      font-size: 1rem;
+    }
+
+    .selection-count {
+      color: var(--muted);
+      font-size: 0.9rem;
+    }
+
+    .character-picker {
+      display: grid;
+      gap: 10px;
+    }
+
+    .character-option {
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: rgba(255, 250, 241, 0.7);
+      overflow: hidden;
+    }
+
+    .character-option.selected {
+      border-color: var(--accent);
+    }
+
+    .character-choice {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 12px;
+      padding: 14px;
+      cursor: pointer;
+    }
+
+    .character-choice input {
+      width: 18px;
+      height: 18px;
+      margin: 2px 0 0;
+      accent-color: var(--accent);
+    }
+
+    .character-choice strong,
+    .character-choice span {
+      display: block;
+    }
+
+    .character-specialty {
+      margin-top: 2px;
+      color: var(--accent);
+      font-size: 0.85rem;
+      font-weight: 700;
+      text-transform: capitalize;
+    }
+
+    .character-theme {
+      margin-top: 5px;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.45;
+    }
+
+    .character-name-field {
+      padding: 0 14px 14px 44px;
+    }
+
+    .character-name-field label {
+      display: block;
+      margin-bottom: 6px;
+      font-size: 0.85rem;
+      font-weight: 700;
+    }
+
+    .character-name-field input {
+      width: 100%;
+      min-height: 42px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      padding: 9px 11px;
+      background: #fff;
+      color: var(--ink);
+      font: inherit;
+    }
+
+    .form-errors {
+      margin: 8px 0 0;
+      padding: 0;
+      color: var(--accent-strong);
+      font-size: 0.85rem;
+      list-style: none;
+    }
+
+    .setup-actions {
+      display: flex;
+      justify-content: flex-end;
+      margin-top: 18px;
+    }
+
+    .setup-actions .button {
+      margin-top: 0;
+    }
+
+    .documentation-dialog {
+      width: min(760px, calc(100% - 32px));
+      max-height: min(820px, calc(100vh - 32px));
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: 0 24px 70px rgba(25, 23, 17, 0.28);
+    }
+
+    .documentation-dialog::backdrop {
+      background: rgba(25, 23, 17, 0.62);
+    }
+
+    .confirmation-dialog {
+      width: min(440px, calc(100% - 32px));
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      color: var(--ink);
+      box-shadow: 0 24px 70px rgba(25, 23, 17, 0.28);
+    }
+
+    .confirmation-dialog::backdrop {
+      background: rgba(25, 23, 17, 0.62);
+    }
+
+    .confirmation-body {
+      padding: 20px;
+    }
+
+    .confirmation-body h2 {
+      margin: 0 0 8px;
+      font-size: 1.15rem;
+    }
+
+    .confirmation-body p {
+      margin: 0;
+      color: var(--muted);
+      line-height: 1.5;
+    }
+
+    .confirmation-actions {
+      display: flex;
+      justify-content: flex-end;
+      gap: 8px;
+      margin-top: 20px;
+    }
+
+    .documentation-header {
+      position: sticky;
+      top: 0;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 16px;
+      padding: 16px 20px;
+      border-bottom: 1px solid var(--line);
+      background: var(--panel);
+    }
+
+    .documentation-header h2 {
+      margin: 0;
+      font-size: 1.1rem;
+    }
+
+    .icon-button {
+      width: 36px;
+      height: 36px;
+      padding: 0;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      background: transparent;
+      color: var(--ink);
+      font: inherit;
+      font-size: 1.5rem;
+      line-height: 1;
+      cursor: pointer;
+    }
+
+    .icon-button:hover {
+      background: var(--field);
+    }
+
+    .documentation-content {
+      margin: 0;
+      padding: 20px;
+      overflow-wrap: anywhere;
+      white-space: pre-wrap;
+      font: 0.9rem/1.6 ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+    }
+
+    .characters-content {
+      padding: 0 20px 20px;
+    }
+
+    .character-sheet {
+      padding: 20px 0;
+      border-bottom: 1px solid var(--line);
+    }
+
+    .character-sheet:last-child {
+      border-bottom: 0;
+    }
+
+    .character-sheet-heading {
+      display: flex;
+      align-items: baseline;
+      justify-content: space-between;
+      gap: 16px;
+      margin-bottom: 14px;
+    }
+
+    .character-sheet-heading h3 {
+      margin: 0;
+      font-size: 1.05rem;
+    }
+
+    .character-class {
+      color: var(--accent);
+      font-weight: 700;
+    }
+
+    .combat-stats,
+    .attribute-grid {
+      display: grid;
+      gap: 8px;
+    }
+
+    .combat-stats {
+      grid-template-columns: repeat(3, minmax(0, 1fr));
+      margin-bottom: 16px;
+    }
+
+    .attribute-grid {
+      grid-template-columns: repeat(6, minmax(0, 1fr));
+    }
+
+    .stat {
+      padding: 9px;
+      border: 1px solid var(--line);
+      border-radius: 6px;
+      text-align: center;
+    }
+
+    .stat-label {
+      display: block;
+      color: var(--muted);
+      font-size: 0.72rem;
+      font-weight: 700;
+      text-transform: uppercase;
+    }
+
+    .stat-value {
+      display: block;
+      margin-top: 3px;
+      font-weight: 800;
+    }
+
+    .sheet-section {
+      margin-top: 16px;
+    }
+
+    .sheet-section h4 {
+      margin: 0 0 6px;
+      font-size: 0.82rem;
+      text-transform: uppercase;
+    }
+
+    .sheet-section p,
+    .sheet-section ul {
+      margin: 0;
+      color: var(--muted);
+      font-size: 0.9rem;
+      line-height: 1.5;
+    }
+
+    .sheet-section ul {
+      padding-left: 18px;
+    }
+
+    .ability-list {
+      display: grid;
+      gap: 8px;
+      padding-left: 0 !important;
+      list-style: none;
+    }
+
+    .ability-list strong,
+    .ability-list span {
+      display: block;
+    }
+
+    .ability-list strong {
+      color: var(--ink);
     }
 
     .chat-panel {
@@ -187,6 +544,7 @@
 
     @media (max-width: 640px) {
       header,
+      .setup-header,
       .chat-header,
       .composer {
         align-items: stretch;
@@ -195,6 +553,21 @@
 
       .account {
         text-align: left;
+      }
+
+      .header-actions {
+        justify-content: space-between;
+      }
+
+      .selection-heading,
+      .character-sheet-heading {
+        align-items: flex-start;
+        flex-direction: column;
+        gap: 4px;
+      }
+
+      .attribute-grid {
+        grid-template-columns: repeat(3, minmax(0, 1fr));
       }
 
       .composer {
@@ -214,27 +587,104 @@
 
     <main>
       {% if request.user.is_authenticated %}
-        <section class="chat-panel" aria-labelledby="chat-title">
-          <div class="chat-header">
-            <div>
-              <h2 id="chat-title">Adventure</h2>
+        {% if active_session %}
+          <section class="chat-panel" aria-labelledby="chat-title">
+            <div class="chat-header">
+              <div>
+                <h2 id="chat-title">Adventure</h2>
+              </div>
+              <div class="header-actions">
+                <button class="button secondary" id="open-characters" type="button">Characters</button>
+                <button class="button secondary" id="open-documentation" type="button">Rules</button>
+                <button class="button danger" id="open-quit-session" type="button">Quit session</button>
+                <form method="post" action="{% url 'account_logout' %}">
+                  {% csrf_token %}
+                  <button class="button secondary" type="submit">Log out</button>
+                </form>
+              </div>
             </div>
-            <form method="post" action="{% url 'account_logout' %}">
-              {% csrf_token %}
-              <button class="button secondary" type="submit">Log out</button>
+            <div class="chat-log">
+              <div class="empty-state">
+                <h2>The road waits.</h2>
+                <p>The chat interface is ready. The dungeon master will begin speaking here once the game loop is connected.</p>
+              </div>
+            </div>
+            <form class="composer">
+              <textarea disabled placeholder="Type your action..."></textarea>
+              <button class="button" type="submit" disabled>Send</button>
             </form>
-          </div>
-          <div class="chat-log">
-            <div class="empty-state">
-              <h2>The road waits.</h2>
-              <p>The chat interface is ready. The dungeon master will begin speaking here once the game loop is connected.</p>
+          </section>
+        {% else %}
+          <section class="setup-panel" aria-labelledby="setup-title">
+            <div class="setup-header">
+              <h2 id="setup-title">Create your party</h2>
+              <div class="header-actions">
+                <button class="button secondary" id="open-documentation" type="button">Rules</button>
+                <form method="post" action="{% url 'account_logout' %}">
+                  {% csrf_token %}
+                  <button class="button secondary" type="submit">Log out</button>
+                </form>
+              </div>
             </div>
-          </div>
-          <form class="composer">
-            <textarea disabled placeholder="Type your action..."></textarea>
-            <button class="button" type="submit" disabled>Send</button>
-          </form>
-        </section>
+            <div class="setup-body">
+              <div class="rules-notice">
+                This adventure uses a deliberately simplified version of D&amp;D fifth edition.
+              </div>
+              <form method="post" id="create-game-form">
+                {% csrf_token %}
+                <div class="selection-heading">
+                  <h3>Choose and name exactly three characters</h3>
+                  <span class="selection-count" id="selection-count" aria-live="polite">0 of 3 selected</span>
+                </div>
+                {% for error in create_game_form.selected_templates.errors %}
+                  <div class="form-errors">{{ error }}</div>
+                {% endfor %}
+                <div class="character-picker">
+                  {% for option in character_options %}
+                    <div class="character-option{% if option.selected %} selected{% endif %}" data-character-option>
+                      <label class="character-choice" for="character-{{ option.key }}">
+                        <input
+                          type="checkbox"
+                          id="character-{{ option.key }}"
+                          name="selected_templates"
+                          value="{{ option.key }}"
+                          {% if option.selected %}checked{% endif %}
+                          data-character-checkbox
+                        >
+                        <span>
+                          <strong>{{ option.character.class }}</strong>
+                          <span class="character-specialty">{{ option.character.specialty }} specialist</span>
+                          <span class="character-theme">{{ option.character.theme }}</span>
+                        </span>
+                      </label>
+                      <div class="character-name-field" {% if not option.selected %}hidden{% endif %} data-name-field>
+                        <label for="name-{{ option.key }}">{{ option.character.class }} name</label>
+                        <input
+                          type="text"
+                          id="name-{{ option.key }}"
+                          name="name_{{ option.key }}"
+                          value="{{ option.name }}"
+                          maxlength="80"
+                          autocomplete="off"
+                          {% if not option.selected %}disabled{% endif %}
+                          data-name-input
+                        >
+                        {% if option.name_errors %}
+                          <ul class="form-errors">
+                            {% for error in option.name_errors %}<li>{{ error }}</li>{% endfor %}
+                          </ul>
+                        {% endif %}
+                      </div>
+                    </div>
+                  {% endfor %}
+                </div>
+                <div class="setup-actions">
+                  <button class="button" id="create-game" type="submit">Create game</button>
+                </div>
+              </form>
+            </div>
+          </section>
+        {% endif %}
       {% else %}
         <section class="login-panel" aria-labelledby="login-title">
           <h2 id="login-title">Log in with Google OAuth</h2>
@@ -244,5 +694,163 @@
       {% endif %}
     </main>
   </div>
+
+  {% if request.user.is_authenticated %}
+    <dialog class="documentation-dialog" id="documentation-dialog" aria-labelledby="documentation-title">
+      <div class="documentation-header">
+        <h2 id="documentation-title">Current Rules</h2>
+        <button class="icon-button" id="close-documentation" type="button" aria-label="Close rules">&times;</button>
+      </div>
+      <pre class="documentation-content">{{ current_documentation }}</pre>
+    </dialog>
+    {% if active_session %}
+      <dialog class="documentation-dialog" id="characters-dialog" aria-labelledby="characters-title">
+        <div class="documentation-header">
+          <h2 id="characters-title">Characters</h2>
+          <button class="icon-button" id="close-characters" type="button" aria-label="Close characters">&times;</button>
+        </div>
+        <div class="characters-content">
+          {% for sheet in character_sheets %}
+            <section class="character-sheet" aria-labelledby="character-{{ sheet.instance.id }}-name">
+              <div class="character-sheet-heading">
+                <h3 id="character-{{ sheet.instance.id }}-name">{{ sheet.instance.name }}</h3>
+                <span class="character-class">{{ sheet.instance.template_json.class }}</span>
+              </div>
+              <div class="combat-stats">
+                <div class="stat"><span class="stat-label">HP</span><span class="stat-value">{{ sheet.instance.template_json.hp.current }}/{{ sheet.instance.template_json.hp.maximum }}</span></div>
+                <div class="stat"><span class="stat-label">AC</span><span class="stat-value">{{ sheet.instance.template_json.ac }}</span></div>
+                <div class="stat"><span class="stat-label">Initiative</span><span class="stat-value">+{{ sheet.instance.template_json.initiative_modifier }}</span></div>
+              </div>
+              <div class="attribute-grid">
+                {% for attribute in sheet.attributes %}
+                  <div class="stat"><span class="stat-label">{{ attribute.label }}</span><span class="stat-value">{% if attribute.value >= 0 %}+{% endif %}{{ attribute.value }}</span></div>
+                {% endfor %}
+              </div>
+              <div class="sheet-section">
+                <h4>Trained skills</h4>
+                <p>{% for skill in sheet.instance.template_json.trained_skills %}{{ skill|title }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+              </div>
+              <div class="sheet-section">
+                <h4>Strong saves</h4>
+                <p>{% for save, value in sheet.instance.template_json.strong_saves.items %}{{ save|title }} {% if value >= 0 %}+{% endif %}{{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+              </div>
+              <div class="sheet-section">
+                <h4>Attacks</h4>
+                <ul>
+                  {% for attack in sheet.instance.template_json.attacks %}
+                    <li>{{ attack.name }}: +{{ attack.attack_bonus }}, {{ attack.damage.dice_count }}d{{ attack.damage.dice_sides }}{% if attack.damage.modifier > 0 %}+{{ attack.damage.modifier }}{% elif attack.damage.modifier < 0 %}{{ attack.damage.modifier }}{% endif %}, {{ attack.range|join:", " }}</li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="sheet-section">
+                <h4>Abilities</h4>
+                <ul class="ability-list">
+                  {% for ability in sheet.instance.template_json.abilities %}
+                    <li>
+                      <strong>{{ ability.name }}</strong>
+                      <span>{{ ability.explanation }}</span>
+                    </li>
+                  {% endfor %}
+                </ul>
+              </div>
+              <div class="sheet-section">
+                <h4>Gear</h4>
+                <p>{% for item in sheet.instance.template_json.gear %}{{ item.name }}{% if item.quantity > 1 %} ({{ item.quantity }}){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+              </div>
+            </section>
+          {% endfor %}
+        </div>
+      </dialog>
+      <dialog class="confirmation-dialog" id="quit-session-dialog" aria-labelledby="quit-session-title">
+        <div class="confirmation-body">
+          <h2 id="quit-session-title">Quit this session?</h2>
+          <p>Your current adventure will become inactive. Your character records will remain stored.</p>
+          <div class="confirmation-actions">
+            <button class="button secondary" id="cancel-quit-session" type="button">Cancel</button>
+            <form method="post" action="{% url 'quit_session' %}">
+              {% csrf_token %}
+              <button class="button danger" type="submit">Confirm quit</button>
+            </form>
+          </div>
+        </div>
+      </dialog>
+    {% endif %}
+    <script>
+      const documentationDialog = document.getElementById("documentation-dialog");
+      const openDocumentation = document.getElementById("open-documentation");
+      const closeDocumentation = document.getElementById("close-documentation");
+
+      openDocumentation.addEventListener("click", () => documentationDialog.showModal());
+      closeDocumentation.addEventListener("click", () => documentationDialog.close());
+      documentationDialog.addEventListener("click", (event) => {
+        if (event.target === documentationDialog) {
+          documentationDialog.close();
+        }
+      });
+
+      const charactersDialog = document.getElementById("characters-dialog");
+      const openCharacters = document.getElementById("open-characters");
+      const closeCharacters = document.getElementById("close-characters");
+
+      if (charactersDialog && openCharacters && closeCharacters) {
+        openCharacters.addEventListener("click", () => charactersDialog.showModal());
+        closeCharacters.addEventListener("click", () => charactersDialog.close());
+        charactersDialog.addEventListener("click", (event) => {
+          if (event.target === charactersDialog) {
+            charactersDialog.close();
+          }
+        });
+      }
+
+      const quitSessionDialog = document.getElementById("quit-session-dialog");
+      const openQuitSession = document.getElementById("open-quit-session");
+      const cancelQuitSession = document.getElementById("cancel-quit-session");
+
+      if (quitSessionDialog && openQuitSession && cancelQuitSession) {
+        openQuitSession.addEventListener("click", () => quitSessionDialog.showModal());
+        cancelQuitSession.addEventListener("click", () => quitSessionDialog.close());
+        quitSessionDialog.addEventListener("click", (event) => {
+          if (event.target === quitSessionDialog) {
+            quitSessionDialog.close();
+          }
+        });
+      }
+
+      const characterCheckboxes = Array.from(document.querySelectorAll("[data-character-checkbox]"));
+      const selectionCount = document.getElementById("selection-count");
+      const createGameButton = document.getElementById("create-game");
+
+      function updateCharacterPicker() {
+        const selected = characterCheckboxes.filter((checkbox) => checkbox.checked);
+        const atLimit = selected.length >= 3;
+
+        characterCheckboxes.forEach((checkbox) => {
+          const option = checkbox.closest("[data-character-option]");
+          const nameField = option.querySelector("[data-name-field]");
+          const nameInput = option.querySelector("[data-name-input]");
+          option.classList.toggle("selected", checkbox.checked);
+          nameField.hidden = !checkbox.checked;
+          nameInput.disabled = !checkbox.checked;
+          nameInput.required = checkbox.checked;
+          checkbox.disabled = atLimit && !checkbox.checked;
+        });
+
+        if (selectionCount) {
+          selectionCount.textContent = `${selected.length} of 3 selected`;
+        }
+        if (createGameButton) {
+          const namesComplete = selected.every((checkbox) => {
+            const option = checkbox.closest("[data-character-option]");
+            return option.querySelector("[data-name-input]").value.trim().length > 0;
+          });
+          createGameButton.disabled = selected.length !== 3 || !namesComplete;
+        }
+      }
+
+      characterCheckboxes.forEach((checkbox) => checkbox.addEventListener("change", updateCharacterPicker));
+      document.querySelectorAll("[data-name-input]").forEach((input) => input.addEventListener("input", updateCharacterPicker));
+      updateCharacterPicker();
+    </script>
+  {% endif %}
 </body>
 </html>
