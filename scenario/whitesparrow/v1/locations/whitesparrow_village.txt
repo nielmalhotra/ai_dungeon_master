@@ -1,0 +1,15 @@
+Definition UUID: 94546ab4-3d58-40e2-af49-70753e784f25
+Name: Whitesparrow Village
+Starting Location: true
+Initially Known: true
+
+# Public Info
+
+Whitesparrow is a village of roughly five hundred people between eastern and
+western mountains. An old keep overlooks the settlement, and a six-fingered hand
+of smooth black stone rises from abandoned excavations near its center.
+
+# DM Only
+
+Fear of the returning Night Blades has made the villagers suspicious of
+outsiders. Sheriff Ruth Willowmane is the village's most reliable protector.

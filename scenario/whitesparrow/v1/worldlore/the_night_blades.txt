@@ -1,0 +1,16 @@
+Definition UUID: d5218545-8822-4b1e-8b76-d5196cc584dc
+Title: The Night Blades
+Initially Known: true
+Related NPC UUID: db1041ba-2f74-44db-ba91-ef7408afff1a
+Related Location UUID: 94546ab4-3d58-40e2-af49-70753e784f25
+
+# Public Info
+
+The Night Blades once terrorized the valley around Whitesparrow. Their notorious
+leader, Ralavaz, spent ten years in prison, but witnesses now claim he has returned
+to the ruined Lonely Torch watchtower.
+
+# DM Only
+
+A masked Night Lord commands the new bandits. The truth behind the Night Blades'
+return and Ralavaz's role is not what the village believes.

@@ -1,15 +1,22 @@
 from copy import deepcopy
 from pathlib import Path
 
-from django.db import transaction
+from django.conf import settings
 from django.contrib.auth.decorators import login_required
-from django.views.decorators.http import require_POST
+from django.db import transaction
 from django.shortcuts import redirect, render
+from django.views.decorators.http import require_POST
 
 from accounts.models import User as AppUser
 
 from .forms import CreateGameForm
-from .models import CharacterInstance, CharacterTemplate, DndSession
+from .models import (
+    CharacterInstance,
+    CharacterTemplate,
+    DndSession,
+    WorldLore,
+    WorldLoreChunkTemplate,
+)
 
 CURRENT_DOCUMENTATION_PATH = (
     Path(__file__).resolve().parent / "assets" / "CURRENT_DOCUMENTATION.txt"
@@ -83,22 +90,49 @@ def home(request):
         )
 
         if request.method == "POST" and create_game_form.is_valid():
-            with transaction.atomic():
-                app_user, _ = AppUser.objects.get_or_create(email=request.user.email)
-                active_session = DndSession.objects.create(user=app_user, active=True)
-                CharacterInstance.objects.bulk_create(
-                    [
-                        CharacterInstance(
-                            dnd_session=active_session,
-                            name=name,
-                            template_json=deepcopy(template.character_template),
-                        )
-                        for template, name in create_game_form.cleaned_data[
-                            "selected_characters"
-                        ]
-                    ]
+            lore_templates = list(
+                WorldLoreChunkTemplate.objects.filter(
+                    scenario_key=settings.SCENARIO_KEY,
+                    active=True,
                 )
-            return redirect("home")
+            )
+            if not lore_templates:
+                create_game_form.add_error(
+                    None,
+                    "The adventure has not been prepared yet.",
+                )
+            else:
+                with transaction.atomic():
+                    app_user, _ = AppUser.objects.get_or_create(email=request.user.email)
+                    active_session = DndSession.objects.create(user=app_user, active=True)
+                    CharacterInstance.objects.bulk_create(
+                        [
+                            CharacterInstance(
+                                dnd_session=active_session,
+                                name=name,
+                                template_json=deepcopy(template.character_template),
+                            )
+                            for template, name in create_game_form.cleaned_data[
+                                "selected_characters"
+                            ]
+                        ]
+                    )
+                    WorldLore.objects.bulk_create(
+                        [
+                            WorldLore(
+                                dnd_session=active_session,
+                                version=template.version,
+                                source_file=template.source_file,
+                                section=template.section,
+                                chunk_number=template.chunk_number,
+                                content=template.content,
+                                metadata=deepcopy(template.metadata),
+                                embedding=list(template.embedding),
+                            )
+                            for template in lore_templates
+                        ]
+                    )
+                return redirect("home")
 
     context = {
         "active_session": active_session,

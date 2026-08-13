@@ -632,6 +632,9 @@
               </div>
               <form method="post" id="create-game-form">
                 {% csrf_token %}
+                {% for error in create_game_form.non_field_errors %}
+                  <div class="form-errors">{{ error }}</div>
+                {% endfor %}
                 <div class="selection-heading">
                   <h3>Choose and name exactly three characters</h3>
                   <span class="selection-count" id="selection-count" aria-live="polite">0 of 3 selected</span>

@@ -19,6 +19,16 @@ def load_env_file(path):
 
 load_env_file(BASE_DIR / ".env")
 
+OPENAI_API_KEY = os.environ.get("OPENAI_API_KEY", "")
+OPENAI_CHAT_MODEL = os.environ.get("OPENAI_CHAT_MODEL", "gpt-5.5")
+OPENAI_EMBEDDING_MODEL = os.environ.get(
+    "OPENAI_EMBEDDING_MODEL",
+    "text-embedding-3-large",
+)
+EMBEDDING_DIMENSIONS = int(os.environ.get("EMBEDDING_DIMENSIONS", "3072"))
+SCENARIO_DIR = BASE_DIR / "scenario"
+SCENARIO_KEY = os.environ.get("SCENARIO_KEY", "whitesparrow")
+
 SECRET_KEY = os.environ.get(
     "DJANGO_SECRET_KEY",
     "django-insecure-local-development-only-change-me",
