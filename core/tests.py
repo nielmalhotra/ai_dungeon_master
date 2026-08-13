@@ -1,8 +1,7 @@
 from copy import deepcopy
-from pathlib import Path
-from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
+from uuid import UUID, uuid4
 
 from django.contrib.auth.models import User
 from django.db import IntegrityError, transaction
@@ -16,40 +15,115 @@ from .models import (
     CharacterInstance,
     CharacterTemplate,
     DndSession,
+    LocationTemplate,
+    NPCTemplate,
+    QuestTemplate,
+    Visibility,
     WorldLore,
     WorldLoreChunkTemplate,
 )
 from .scenario_lore import (
-    EmbeddedScenarioChunk,
-    ScenarioChunk,
     ScenarioLoreError,
-    embed_scenario_chunks,
-    load_scenario_chunks,
-    sync_world_lore_chunk_templates,
+    build_scenario_embedding_inputs,
+    embed_scenario_inputs,
+    load_scenario_release,
+    sync_scenario_templates,
 )
 
 
-def create_lore_template(**overrides):
-    values = {
-        "scenario_key": "whitesparrow",
-        "version": "1.0",
-        "active": True,
-        "source_file": "main.txt",
-        "section": "The Night Blades of Whitesparrow",
-        "chunk_number": 1,
-        "content": "A rainy road leads to Whitesparrow.",
-        "metadata": {"visibility": "player"},
-        "embedding": [0.0] * 3072,
+ZERO_EMBEDDING = [0.0] * 3072
+LOCATION_UUID = UUID("94546ab4-3d58-40e2-af49-70753e784f25")
+NPC_UUID = UUID("db1041ba-2f74-44db-ba91-ef7408afff1a")
+QUEST_UUID = UUID("4b802d31-63b9-4467-9710-b7b5b2c0b793")
+LORE_UUID = UUID("d5218545-8822-4b1e-8b76-d5196cc584dc")
+
+
+def visibility_state(public_summary, dm_summary):
+    return {
+        "public_info": {"summary": public_summary},
+        "dm_only": {"summary": dm_summary},
     }
-    values.update(overrides)
-    return WorldLoreChunkTemplate.objects.create(**values)
 
 
-def embedded_lore_fixture(chunks):
-    return [
-        EmbeddedScenarioChunk(chunk=chunk, embedding=[0.0] * 3072)
-        for chunk in chunks
-    ]
+def create_scenario_templates(version=1, active=True):
+    location = LocationTemplate.objects.create(
+        definition_uuid=LOCATION_UUID,
+        scenario_key="whitesparrow",
+        version=version,
+        active=active,
+        source_file="locations/whitesparrow_village.txt",
+        name="Whitesparrow Village",
+        is_starting_location=True,
+        initially_known=True,
+        definition_json=visibility_state(
+            "Whitesparrow is a mountain village.",
+            "The villagers are suspicious of outsiders.",
+        ),
+        public_embedding=ZERO_EMBEDDING,
+        dm_embedding=ZERO_EMBEDDING,
+    )
+    npc = NPCTemplate.objects.create(
+        definition_uuid=NPC_UUID,
+        scenario_key="whitesparrow",
+        version=version,
+        active=active,
+        source_file="npcs/sheriff_ruth_willowmane.txt",
+        name="Sheriff Ruth Willowmane",
+        initial_location_template=location,
+        initially_known=False,
+        definition_json=visibility_state(
+            "Ruth is Whitesparrow's sheriff.",
+            "Ruth's anger toward Ralavaz is personal.",
+        ),
+        public_embedding=ZERO_EMBEDDING,
+        dm_embedding=ZERO_EMBEDDING,
+    )
+    quest = QuestTemplate.objects.create(
+        definition_uuid=QUEST_UUID,
+        scenario_key="whitesparrow",
+        version=version,
+        active=active,
+        source_file="quests/investigate_the_night_blades.txt",
+        title="Investigate the Night Blades",
+        initial_status=QuestTemplate.InitialStatus.AVAILABLE,
+        initially_known=True,
+        definition_json=visibility_state(
+            "Discover who leads the Night Blades.",
+            "The masked Night Lord has a hidden motive.",
+        ),
+        related_templates_json=[
+            {"type": "npc", "id": npc.id},
+            {"type": "location", "id": location.id},
+        ],
+        public_embedding=ZERO_EMBEDDING,
+        dm_embedding=ZERO_EMBEDDING,
+    )
+    lore = WorldLoreChunkTemplate.objects.create(
+        definition_uuid=LORE_UUID,
+        scenario_key="whitesparrow",
+        version=version,
+        active=active,
+        source_file="worldlore/the_night_blades.txt",
+        title="The Night Blades",
+        section="Public Info",
+        chunk_number=1,
+        visibility=Visibility.PUBLIC_INFO,
+        initially_known=True,
+        content="The Night Blades once terrorized the valley.",
+        metadata_json={
+            "related_templates": [
+                {"type": "npc", "id": npc.id},
+                {"type": "location", "id": location.id},
+            ]
+        },
+        embedding=ZERO_EMBEDDING,
+    )
+    return {
+        "location": location,
+        "npc": npc,
+        "quest": quest,
+        "lore": lore,
+    }
 
 
 class HomeViewTests(TestCase):
@@ -131,9 +205,9 @@ class HomeViewTests(TestCase):
         self.assertContains(response, "Enter a name for this character.")
         self.assertFalse(DndSession.objects.exists())
 
-    def test_create_game_saves_character_and_lore_snapshots(self):
+    def test_create_game_instantiates_complete_scenario(self):
         self.login()
-        lore_template = create_lore_template()
+        templates = create_scenario_templates()
         original_warrior = deepcopy(
             CharacterTemplate.objects.get(template_key="warrior").character_template
         )
@@ -149,29 +223,46 @@ class HomeViewTests(TestCase):
         )
 
         self.assertRedirects(response, reverse("home"))
-        dnd_session = DndSession.objects.get(active=True)
-        self.assertEqual(dnd_session.user.email, "player@example.com")
-        self.assertEqual(dnd_session.characters.count(), 3)
-        self.assertEqual(dnd_session.world_lore.count(), 1)
-        lore = dnd_session.world_lore.get()
-        self.assertEqual(lore.version, "1.0")
-        self.assertEqual(lore.source_file, "main.txt")
-        self.assertEqual(lore.metadata["visibility"], "player")
-        lore_template.content = "Changed after session creation."
-        lore_template.save(update_fields=["content"])
-        lore.refresh_from_db()
-        self.assertEqual(lore.content, "A rainy road leads to Whitesparrow.")
-        warrior = dnd_session.characters.get(name="Alden")
-        self.assertEqual(warrior.template_json, original_warrior)
-        self.assertNotIn("name", warrior.template_json)
+        campaign = DndSession.objects.get(active=True)
+        self.assertEqual(campaign.user.email, "player@example.com")
+        self.assertEqual(campaign.scenario_key, "whitesparrow")
+        self.assertEqual(campaign.scenario_version, 1)
+        self.assertEqual(campaign.locations.count(), 1)
+        self.assertEqual(campaign.npcs.count(), 1)
+        self.assertEqual(campaign.quests.count(), 1)
+        self.assertEqual(campaign.world_lore.count(), 1)
+        self.assertEqual(campaign.characters.count(), 3)
 
-        CharacterTemplate.objects.filter(template_key="warrior").update(
-            character_template={"class": "Changed"}
+        location = campaign.locations.get()
+        npc = campaign.npcs.get()
+        quest = campaign.quests.get()
+        self.assertEqual(campaign.current_location, location)
+        self.assertEqual(location.template, templates["location"])
+        self.assertEqual(npc.current_location, location)
+        self.assertEqual(npc.state_json["public_info"], {})
+        self.assertEqual(quest.status, QuestTemplate.InitialStatus.AVAILABLE)
+        self.assertEqual(
+            quest.related_entities_json,
+            [
+                {"type": "npc", "id": npc.id},
+                {"type": "location", "id": location.id},
+            ],
         )
-        warrior.refresh_from_db()
+        self.assertEqual(
+            campaign.world_lore.get().template,
+            templates["lore"],
+        )
+        self.assertTrue(
+            all(
+                character.current_location_id == location.id
+                for character in campaign.characters.all()
+            )
+        )
+        warrior = campaign.characters.get(name="Alden")
         self.assertEqual(warrior.template_json, original_warrior)
+        self.assertEqual(warrior.mechanics_json, original_warrior)
 
-    def test_create_game_requires_prebuilt_lore_templates(self):
+    def test_create_game_requires_complete_active_scenario(self):
         self.login()
 
         response = self.client.post(
@@ -264,40 +355,44 @@ class DndSessionTests(TestCase):
 
 
 class ScenarioLoreTests(TestCase):
-    def test_scenario_files_share_version_and_create_semantic_chunks(self):
-        chunks = load_scenario_chunks()
+    def test_release_loads_all_definition_types_and_resolves_source_contract(self):
+        release = load_scenario_release()
 
-        self.assertGreater(len(chunks), 20)
-        self.assertEqual({chunk.version for chunk in chunks}, {"1.0"})
-        self.assertEqual(chunks[0].source_file, "main.txt")
-        self.assertEqual(chunks[0].metadata["visibility"], "player")
-        self.assertTrue(
-            all(
-                chunk.metadata["visibility"] == "game_master"
-                for chunk in chunks
-                if chunk.source_file != "main.txt"
-            )
+        self.assertEqual(release.scenario_key, "whitesparrow")
+        self.assertEqual(release.version, 1)
+        self.assertEqual(len(release.definitions), 4)
+        self.assertEqual(
+            {definition.definition_type for definition in release.definitions},
+            {"location", "npc", "quest", "world_lore"},
         )
-        self.assertIn("Mud Pit", {chunk.section for chunk in chunks})
-        self.assertNotIn("ATTRIBUTION.txt", {chunk.source_file for chunk in chunks})
+        self.assertEqual(len(release.lore_chunks), 2)
+        self.assertEqual(
+            {chunk.visibility for chunk in release.lore_chunks},
+            {Visibility.PUBLIC_INFO, Visibility.DM_ONLY},
+        )
+        self.assertTrue(release.lore_chunks[0].initially_known)
+        self.assertFalse(release.lore_chunks[1].initially_known)
 
-    def test_mismatched_file_version_is_rejected(self):
+        quest = release.definitions_of_type("quest")[0]
+        self.assertEqual(
+            quest.related_references,
+            (("npc", NPC_UUID), ("location", LOCATION_UUID)),
+        )
+
+    def test_empty_required_definition_folder_is_rejected(self):
+        from pathlib import Path
+        from tempfile import TemporaryDirectory
+
         with TemporaryDirectory() as directory:
-            scenario_dir = Path(directory)
-            (scenario_dir / "main.txt").write_text(
-                "Version 1.0\n# Main\n\nThe public premise.",
-                encoding="utf-8",
-            )
-            (scenario_dir / "private.txt").write_text(
-                "Version 1.1\n# Secret\n\nThe private truth.",
-                encoding="utf-8",
-            )
+            release_dir = Path(directory) / "whitesparrow" / "v1"
+            for folder in ("locations", "npcs", "quests"):
+                (release_dir / folder).mkdir(parents=True, exist_ok=True)
 
-            with self.assertRaisesRegex(ScenarioLoreError, "expected Version 1.0"):
-                load_scenario_chunks(scenario_dir)
+            with self.assertRaisesRegex(ScenarioLoreError, "locations/"):
+                load_scenario_release(scenario_dir=directory)
 
     def test_embedding_requests_are_batched_and_validated(self):
-        chunks = load_scenario_chunks()
+        inputs = build_scenario_embedding_inputs(load_scenario_release())
 
         def embedding_response(**request):
             return SimpleNamespace(
@@ -312,36 +407,70 @@ class ScenarioLoreTests(TestCase):
             embeddings=SimpleNamespace(create=create_embedding)
         )
 
-        embedded = embed_scenario_chunks(chunks, client=client, batch_size=10)
+        embedded = embed_scenario_inputs(inputs, client=client, batch_size=3)
 
-        self.assertEqual(create_embedding.call_count, 4)
+        self.assertEqual(create_embedding.call_count, 3)
         request = create_embedding.call_args_list[0].kwargs
         self.assertEqual(request["model"], "text-embedding-3-large")
         self.assertEqual(request["dimensions"], 3072)
-        self.assertEqual(len(request["input"]), 10)
-        self.assertEqual(len(embedded), len(chunks))
-        self.assertEqual(len(embedded[0].embedding), 3072)
+        self.assertEqual(len(request["input"]), 3)
+        self.assertEqual(len(embedded), len(inputs))
+        self.assertEqual(len(next(iter(embedded.values()))), 3072)
 
-    @patch("core.scenario_lore.embed_scenario_chunks")
-    def test_template_sync_activates_new_version_and_keeps_old_version(
+    @patch("core.scenario_lore.embed_scenario_inputs")
+    def test_template_sync_builds_and_links_complete_active_release(
         self,
-        embed_chunks,
+        embed_inputs,
     ):
-        old_template = create_lore_template(version="0.9")
-        chunks = load_scenario_chunks()
-        embed_chunks.return_value = embedded_lore_fixture(chunks)
+        old_template = WorldLoreChunkTemplate.objects.create(
+            definition_uuid=uuid4(),
+            scenario_key="whitesparrow",
+            version=2,
+            active=True,
+            source_file="worldlore/old.txt",
+            title="Old Lore",
+            section="Public Info",
+            chunk_number=1,
+            visibility=Visibility.PUBLIC_INFO,
+            initially_known=True,
+            content="Old lore.",
+            embedding=ZERO_EMBEDDING,
+        )
 
-        version, count = sync_world_lore_chunk_templates()
+        def embedded_fixture(inputs, **kwargs):
+            return {item.key: ZERO_EMBEDDING for item in inputs}
 
-        self.assertEqual(version, "1.0")
-        self.assertEqual(count, len(chunks))
+        embed_inputs.side_effect = embedded_fixture
+
+        version, count = sync_scenario_templates()
+
+        self.assertEqual(version, 1)
+        self.assertEqual(count, 5)
+        self.assertEqual(LocationTemplate.objects.filter(active=True).count(), 1)
+        self.assertEqual(NPCTemplate.objects.filter(active=True).count(), 1)
+        self.assertEqual(QuestTemplate.objects.filter(active=True).count(), 1)
+        self.assertEqual(
+            WorldLoreChunkTemplate.objects.filter(active=True).count(),
+            2,
+        )
         old_template.refresh_from_db()
         self.assertFalse(old_template.active)
+
+        location = LocationTemplate.objects.get(active=True)
+        npc = NPCTemplate.objects.get(active=True)
+        quest = QuestTemplate.objects.get(active=True)
+        self.assertEqual(npc.initial_location_template, location)
         self.assertEqual(
-            WorldLoreChunkTemplate.objects.filter(
-                scenario_key="whitesparrow",
-                version="1.0",
-                active=True,
-            ).count(),
-            len(chunks),
+            quest.related_templates_json,
+            [
+                {"type": "npc", "id": npc.id},
+                {"type": "location", "id": location.id},
+            ],
         )
+
+        second_version, second_count = sync_scenario_templates()
+        self.assertEqual((second_version, second_count), (1, 5))
+        self.assertEqual(LocationTemplate.objects.count(), 1)
+        self.assertEqual(NPCTemplate.objects.count(), 1)
+        self.assertEqual(QuestTemplate.objects.count(), 1)
+        self.assertEqual(WorldLoreChunkTemplate.objects.count(), 3)

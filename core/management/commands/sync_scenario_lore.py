@@ -1,10 +1,10 @@
 from django.core.management.base import BaseCommand, CommandError
 
-from core.scenario_lore import ScenarioLoreError, sync_world_lore_chunk_templates
+from core.scenario_lore import ScenarioLoreError, sync_scenario_templates
 
 
 class Command(BaseCommand):
-    help = "Chunk and embed the scenario files into world lore templates."
+    help = "Validate, embed, and synchronize the latest scenario release."
 
     def add_arguments(self, parser):
         parser.add_argument("--scenario-dir")
@@ -13,7 +13,7 @@ class Command(BaseCommand):
 
     def handle(self, *args, **options):
         try:
-            version, count = sync_world_lore_chunk_templates(
+            version, count = sync_scenario_templates(
                 scenario_dir=options["scenario_dir"],
                 scenario_key=options["scenario_key"],
                 batch_size=options["batch_size"],
@@ -23,6 +23,6 @@ class Command(BaseCommand):
 
         self.stdout.write(
             self.style.SUCCESS(
-                f"Synced {count} world lore templates for Version {version}."
+                f"Synced {count} scenario templates for v{version}."
             )
         )

@@ -1,0 +1,18 @@
+Whitesparrow Scenario Attribution
+
+This work includes adapted material taken from the Lazy GM's Resource Document
+by Michael E. Shea of SlyFlourish.com:
+
+https://slyflourish.com/lazy_gm_resource_document.html
+
+The source material is available under the Creative Commons Attribution 4.0
+International License:
+
+https://creativecommons.org/licenses/by/4.0/
+
+The Village of Whitesparrow and The Night Blade were excerpted, reorganized,
+summarized, and modified for a combatless AI Dungeon Master scenario. Michael E.
+Shea and Sly Flourish do not endorse this project.
+
+This attribution applies to the adapted scenario material under
+scenario/whitesparrow/. It does not change the license of the surrounding project.

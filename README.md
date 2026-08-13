@@ -33,10 +33,11 @@ docker compose -f docker-compose.local.yml down
 
 ## Scenario lore
 
-The versioned source corpus lives in `scenario/`. Every lore file must begin with
-`Version MajorNumber.MinorNumber`, and every file in one release must match the
-version in `scenario/main.txt`. `main.txt` contains the player-visible premise;
-the other lore files contain private game-master knowledge.
+The versioned source corpus lives at `scenario/<scenario_key>/vN/`. The
+synchronizer selects the greatest numeric version and validates the required
+`locations/`, `npcs/`, `quests/`, and `worldlore/` folders. Definition UUIDs are
+stable across releases and relationships in source files are resolved to template
+IDs during synchronization.
 
 Build or refresh the canonical scenario templates locally with:
 
@@ -50,8 +51,13 @@ On the production server, run the same command through Docker:
 docker compose run --rm web python manage.py sync_scenario_lore
 ```
 
-The command semantically chunks the files, embeds them in batches, and atomically
-activates the resulting `world_lore_chunk_template` rows. Previous versions remain
-available but inactive. Creating a game copies the active rows into `world_lore`,
-so it performs no OpenAI request and existing sessions retain immutable snapshots.
-The attribution file is retained with the source but is not embedded as game lore.
+The command embeds public and private source content in batches and atomically
+activates the location, NPC, quest, and world-lore templates for that release.
+Previous versions remain available but inactive. Creating a game performs no
+OpenAI request: it instantiates the active release, resolves runtime relationships,
+and pins the campaign to that exact version.
+
+Whitesparrow and *The Night Blade* contain adapted CC BY 4.0 material. Their
+required attribution and modification notice are in
+`scenario/whitesparrow/ATTRIBUTION.txt`; that scenario material is not covered by
+the repository's MIT license.
