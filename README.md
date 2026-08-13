@@ -1,6 +1,12 @@
 # ai_dungeon_master
 AI dungeon master for dungeons and dragon
 
+## Current scope
+
+The current prototype focuses on a combatless Dungeon Master with persistent
+campaign state, retrieval, tool use, and structured outputs. Combat is planned as
+a future feature.
+
 ## Local development
 
 From the project directory, start the local PostgreSQL database:

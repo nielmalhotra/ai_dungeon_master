@@ -4,4 +4,5 @@ psycopg[binary]>=3.2,<4.0
 django-allauth[socialaccount]>=65.14,<65.15
 openai>=1.0,<3.0
 pgvector>=0.3,<1.0
+pydantic>=2.7,<3.0
 urllib3<2

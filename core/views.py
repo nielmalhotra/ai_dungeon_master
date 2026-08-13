@@ -5,6 +5,8 @@ from django.conf import settings
 from django.contrib.auth.decorators import login_required
 from django.db import transaction
 from django.shortcuts import redirect, render
+from django.utils.html import escape
+from django.utils.safestring import mark_safe
 from django.views.decorators.http import require_POST
 
 from accounts.models import User as AppUser
@@ -21,6 +23,8 @@ from .models import (
 CURRENT_DOCUMENTATION_PATH = (
     Path(__file__).resolve().parent / "assets" / "CURRENT_DOCUMENTATION.txt"
 )
+FUTURE_COMBAT_START = "[[future-combat]]"
+FUTURE_COMBAT_END = "[[/future-combat]]"
 ATTRIBUTE_ORDER = (
     "strength",
     "dexterity",
@@ -29,6 +33,21 @@ ATTRIBUTE_ORDER = (
     "wisdom",
     "charisma",
 )
+
+
+def _render_current_documentation():
+    documentation = CURRENT_DOCUMENTATION_PATH.read_text()
+    if documentation.count(FUTURE_COMBAT_START) != documentation.count(
+        FUTURE_COMBAT_END
+    ):
+        raise ValueError("Future combat documentation markers are unbalanced.")
+
+    escaped_documentation = escape(documentation)
+    rendered_documentation = escaped_documentation.replace(
+        FUTURE_COMBAT_START,
+        '<s class="future-combat">',
+    ).replace(FUTURE_COMBAT_END, "</s>")
+    return mark_safe(rendered_documentation)
 
 
 def _character_options(character_templates, form):
@@ -78,7 +97,7 @@ def _character_sheets(active_session):
 
 
 def home(request):
-    current_documentation = CURRENT_DOCUMENTATION_PATH.read_text()
+    current_documentation = _render_current_documentation()
     active_session = _active_session_for(request)
     character_templates = list(CharacterTemplate.objects.all())
     create_game_form = None
@@ -111,6 +130,7 @@ def home(request):
                                 dnd_session=active_session,
                                 name=name,
                                 template_json=deepcopy(template.character_template),
+                                mechanics_json=deepcopy(template.character_template),
                             )
                             for template, name in create_game_form.cleaned_data[
                                 "selected_characters"
@@ -121,13 +141,7 @@ def home(request):
                         [
                             WorldLore(
                                 dnd_session=active_session,
-                                version=template.version,
-                                source_file=template.source_file,
-                                section=template.section,
-                                chunk_number=template.chunk_number,
-                                content=template.content,
-                                metadata=deepcopy(template.metadata),
-                                embedding=list(template.embedding),
+                                template=template,
                             )
                             for template in lore_templates
                         ]

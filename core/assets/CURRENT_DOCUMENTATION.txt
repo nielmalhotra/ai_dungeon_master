@@ -1,5 +1,10 @@
 AI DUNGEON MASTER RULESET
 
+CURRENT SCOPE
+
+Combat is a future feature and is not available in the current prototype.
+Retained combat rules are struck through below and do not currently apply.
+
 AUTHORITY
 
 This is the complete ruleset. Standard fifth-edition mechanics do not apply
@@ -17,8 +22,9 @@ characters. Characters do not have levels.
 
 The five available classes are:
 
-Warrior - Specializes in Strength. Excels at melee combat, breaking, lifting,
-          pushing, and other displays of physical power.
+Warrior - Specializes in Strength. Excels at [[future-combat]]melee combat,
+          [[/future-combat]]breaking, lifting, pushing, and other displays of
+          physical power.
 Rogue   - Specializes in Dexterity. Excels at stealth, precision, locks, traps,
           theft, and agile movement.
 Wizard  - Specializes in Intelligence. Excels at knowledge, investigation,
@@ -32,8 +38,8 @@ SIMPLIFIED CHARACTER SHEET
 
 Identity records the character's name and class.
 
-Combat statistics record current and maximum HP, AC, and the Initiative
-modifier.
+[[future-combat]]Combat statistics record current and maximum HP, AC, and the
+Initiative modifier.[[/future-combat]]
 
 Attributes record the character's modifiers for Strength, Dexterity,
 Constitution, Intelligence, Wisdom, and Charisma.
@@ -41,8 +47,9 @@ Constitution, Intelligence, Wisdom, and Charisma.
 Trained skills identify the checks that receive the character's +2 trained
 skill bonus. Strong saves list the character's best saving throw modifiers.
 
-Attacks list the attack's name, attack bonus, damage, and range. Abilities list
-their target, range, required roll, effect, and usage limit.
+[[future-combat]]Attacks list the attack's name, attack bonus, damage, and
+range.[[/future-combat]] Abilities list their target, range, required roll,
+effect, and usage limit.
 
 Gear records carried weapons, armor, tools, consumable items, and gold.
 Conditions, current HP, ability uses, inventory quantities, and location are
@@ -51,9 +58,10 @@ dynamic state and must remain current throughout the adventure.
 Every character begins with a Phoenix of Invincibility and a War-Hating God's
 Bow in addition to class-specific gear.
 
-Each character has a name, class, HP, AC, Initiative modifier, attributes,
-trained skills, strong saves, attacks, abilities, gear, conditions, and an
-independent location.
+Each character has a name, class, attributes, trained skills, strong saves,
+abilities, gear, conditions, and an independent location.
+[[future-combat]]Combat adds HP, AC, an Initiative modifier, and attacks.
+[[/future-combat]]
 
 The six attributes are Strength, Dexterity, Constitution, Intelligence,
 Wisdom, and Charisma.
@@ -62,8 +70,9 @@ The trained skills are Athletics, Stealth, Sleight of Hand, Knowledge,
 Investigation, Perception, Survival, Insight, Persuasion, Deception,
 Intimidation, and Performance. A trained skill adds +2 when applicable.
 
-Attacks list an attack bonus, damage, and range. Abilities define their target,
-range, roll, effect, and usage limit.
+[[future-combat]]Attacks list an attack bonus, damage, and range.
+[[/future-combat]]Abilities define their target, range, roll, effect, and usage
+limit.
 
 CORE ROLLS
 
@@ -80,15 +89,17 @@ Suggested difficulty classes:
 15 - Hard
 18 - Very hard
 
-Attack: d20 + attack bonus against AC. On success, roll damage.
+[[future-combat]]Attack: d20 + attack bonus against AC. On success, roll damage.
+[[/future-combat]]
 
 Saving throw: d20 + save modifier against the effect's DC.
 
 Contest: both sides roll with relevant modifiers. The higher total wins. Ties
 are rerolled by the dice tool.
 
-Initiative: every combatant rolls d20 + Initiative modifier. The highest total
-acts first. Tied combatants reroll until the tie is resolved.
+[[future-combat]]Initiative: every combatant rolls d20 + Initiative modifier.
+The highest total acts first. Tied combatants reroll until the tie is resolved.
+[[/future-combat]]
 
 ADVANTAGE AND DISADVANTAGE
 
@@ -104,14 +115,17 @@ character rolls 2d20 and takes the higher result.
 
 ACTIONS
 
-Each turn permits movement plus one action. Actions are Attack, Defend, Use
-Ability, Use Item, Interact, or Improvise.
+Each turn permits movement plus one action. Current actions are Use Ability, Use
+Item, Interact, or Improvise.
 
-Defend gives attacks against the character disadvantage until that character's
-next turn.
+[[future-combat]]Combat adds the Attack and Defend actions. Defend gives attacks
+against the character disadvantage until that character's next turn.
+[[/future-combat]]
 
 Interactions may be automatic or require a check. Improvised actions become a
-check, attack, saving throw, contest, automatic success, or automatic failure.
+check, saving throw, contest, automatic success, or automatic failure.
+[[future-combat]]Combat may resolve an improvised action as an attack.
+[[/future-combat]]
 Obviously successful actions require no roll. Impossible actions automatically
 fail without a roll.
 
@@ -127,9 +141,10 @@ changed until the player clarifies the command.
 MOVEMENT AND LOCATION
 
 Distance uses three bands: ENGAGED, NEAR, and FAR. Normal movement changes
-distance by one band. Melee attacks require ENGAGED. Ranged attacks normally
-work at NEAR or FAR. Ranged attacks made while ENGAGED have disadvantage.
-Leaving ENGAGED does not trigger an opportunity attack.
+distance by one band. [[future-combat]]Melee attacks require ENGAGED. Ranged
+attacks normally work at NEAR or FAR. Ranged attacks made while ENGAGED have
+disadvantage. Leaving ENGAGED does not trigger an opportunity attack.
+[[/future-combat]]
 
 Each character has an independent location. Actions affect only the character's
 current location, and characters can interact only with perceptible targets.
@@ -138,7 +153,8 @@ scene groups.
 
 NPCs and characters observe only events they can perceive at their location.
 Characters do not automatically share information learned while separated.
-Combat includes only creatures present at that location.
+[[future-combat]]Combat includes only creatures present at that location.
+[[/future-combat]]
 
 CONDITIONS
 
@@ -157,8 +173,8 @@ Exhausted: All ability checks have disadvantage, and changing one distance band
 consumes the character's action.
 
 Prone, Restrained, and Stunned expire after the affected character completes
-two turns. A complete noncombat turn spent resting removes all conditions,
-including Exhausted.
+two turns. A complete turn spent resting removes all conditions, including
+Exhausted.
 
 HEALTH AND RECOVERY
 
@@ -169,16 +185,18 @@ Every character possesses a Phoenix of Invincibility. Death immediately
 triggers the Phoenix, restores the character to maximum HP, removes all
 conditions, and records a resurrection event.
 
-A normal rest requires one complete noncombat turn of doing nothing and removes
+A normal rest requires one complete turn of doing nothing and removes
 conditions. Sleeping, including taking a nap or staying at an inn, restores
 maximum HP and all limited-use abilities.
 
+[[future-combat]]
 WAR-HATING GOD'S BOW
 
 Every character possesses a War-Hating God's Bow. Using it consumes the
 character's action. Its target must exist and be perceptible to the character.
 The bow requires no attack or damage roll. It ignores AC, HP, advantage,
 disadvantage, and defensive abilities. It always hits and kills its target.
+[[/future-combat]]
 
 PARTY COMMANDS
 
@@ -186,8 +204,9 @@ The player submits one message containing actions for all three characters.
 Each character may perform at most one action. A character omitted from the
 command does nothing.
 
-Outside combat, the AI determines a causal resolution order and accounts for
-interactions among actions. During combat, actions resolve in initiative order.
+The AI determines a causal resolution order and accounts for interactions among
+actions. [[future-combat]]During combat, actions resolve in initiative order.
+[[/future-combat]]
 One submitted party command advances one global turn across every location.
 
 If an action targets someone who is not perceptible at the character's location,
@@ -208,7 +227,9 @@ GAME LOOP
 8. The process repeats.
 
 Authoritative state includes HP, conditions, inventory, locations,
-relationships, NPC knowledge, discovered clues, world objects, combat state,
-and pending clarifications.
+relationships, NPC knowledge, discovered clues, world objects, and pending
+clarifications. [[future-combat]]Combat adds authoritative combat state.
+[[/future-combat]]
 
-Combat ends when one side dies, flees, surrenders, or completes its objective.
+[[future-combat]]Combat ends when one side dies, flees, surrenders, or completes
+its objective.[[/future-combat]]

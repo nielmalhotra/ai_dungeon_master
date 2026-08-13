@@ -21,8 +21,8 @@ migrations are added.
 - Current state lives on the campaign or entity instance. Historical changes live
   in `WorldEvent`.
 - Only validated application tools may mutate state or create events.
-- Combat, encounters, combatants, play sessions, and per-character knowledge are
-  outside this prototype.
+- Combat, encounters, and combatants are reserved for a future feature. Play
+  sessions and per-character knowledge are outside this prototype.
 
 ## Shared JSON contracts
 
