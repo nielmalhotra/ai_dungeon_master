@@ -11,7 +11,7 @@ from django.conf import settings
 from django.contrib.auth.models import User
 from django.core.management import call_command
 from django.db import IntegrityError, transaction
-from django.test import TestCase
+from django.test import SimpleTestCase, TestCase
 from django.urls import reverse
 
 from accounts.models import User as AppUser
@@ -511,6 +511,26 @@ class CampaignCreationTests(TestCase):
                 user=app_user,
                 status=DndSession.Status.ACTIVE,
             )
+
+
+class CharacterTemplateContractTests(SimpleTestCase):
+    def test_character_templates_include_shared_knowledge_and_non_combat_options(self):
+        templates = load_character_templates()
+
+        self.assertEqual(len(templates), 5)
+        for template_key, character in templates.items():
+            with self.subTest(template=template_key):
+                gear_keys = {item["key"] for item in character["gear"]}
+                self.assertIn("fairy_of_knowledge", gear_keys)
+                self.assertTrue(
+                    any(
+                        ability.get("category") == "non_combat"
+                        for ability in character["abilities"]
+                    )
+                )
+                self.assertIn("hp", character)
+                self.assertIn("ac", character)
+                self.assertIn("initiative_modifier", character)
 
 
 class ExistingInterfaceTests(TestCase):

@@ -22,14 +22,14 @@
         "name": "Longsword",
         "attack_bonus": 5,
         "damage": {"dice_count": 1, "dice_sides": 8, "modifier": 3},
-        "range": ["ENGAGED"]
+        "range": ["MELEE"]
       },
       {
         "key": "javelin",
         "name": "Javelin",
         "attack_bonus": 3,
         "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 3},
-        "range": ["NEAR", "FAR"]
+        "range": ["RANGED"]
       }
     ],
     "abilities": [
@@ -48,9 +48,8 @@
       {
         "key": "shield_bash",
         "name": "Shield Bash",
-        "explanation": "Bash an ENGAGED creature with your shield. Win a Strength contest to make the target Prone for two turns.",
-        "target": "one_perceptible_creature",
-        "range": ["ENGAGED"],
+        "explanation": "Bash a creature within reach with your shield. Win a Strength contest to make the target Prone for two turns.",
+        "target": "one_creature",
         "resolution": {
           "type": "contest",
           "actor_attribute": "strength",
@@ -58,6 +57,20 @@
         },
         "effect": {"type": "condition", "condition": "prone", "turns": 2},
         "uses": null
+      },
+      {
+        "key": "heroic_effort",
+        "name": "Heroic Effort",
+        "category": "non_combat",
+        "explanation": "Call on exceptional strength while lifting, breaking, pushing, or carrying. Gain one source of advantage on one non-combat Strength check. You can use this once before sleeping.",
+        "target": "self",
+        "resolution": {"type": "automatic"},
+        "effect": {
+          "type": "next_non_combat_check_advantage",
+          "attribute": "strength",
+          "sources": 1
+        },
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
       }
     ],
     "gear": [
@@ -67,7 +80,8 @@
       {"key": "rope", "name": "Rope", "quantity": 1},
       {"key": "torch", "name": "Torch", "quantity": 1},
       {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
-      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
+      {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
     "conditions": [],
     "location": null
@@ -95,14 +109,14 @@
         "name": "Dagger",
         "attack_bonus": 5,
         "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 3},
-        "range": ["ENGAGED"]
+        "range": ["MELEE"]
       },
       {
         "key": "shortbow",
         "name": "Shortbow",
         "attack_bonus": 5,
         "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 3},
-        "range": ["NEAR", "FAR"]
+        "range": ["RANGED"]
       }
     ],
     "abilities": [
@@ -130,6 +144,20 @@
           "duration": "until_next_turn"
         },
         "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      },
+      {
+        "key": "expert_hands",
+        "name": "Expert Hands",
+        "category": "non_combat",
+        "explanation": "Focus on a delicate task involving locks, traps, theft, or agile movement. Gain one source of advantage on one applicable non-combat Dexterity check. You can use this once before sleeping.",
+        "target": "self",
+        "resolution": {"type": "automatic"},
+        "effect": {
+          "type": "next_non_combat_check_advantage",
+          "attribute": "dexterity",
+          "sources": 1
+        },
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
       }
     ],
     "gear": [
@@ -139,7 +167,8 @@
       {"key": "smoke_bomb_kit", "name": "Smoke Bomb Kit", "quantity": 1},
       {"key": "grappling_hook", "name": "Grappling Hook", "quantity": 1},
       {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
-      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
+      {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
     "conditions": [],
     "location": null
@@ -167,7 +196,7 @@
         "name": "Staff",
         "attack_bonus": 2,
         "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 0},
-        "range": ["ENGAGED"]
+        "range": ["MELEE"]
       },
       {
         "key": "fire_bolt",
@@ -175,16 +204,15 @@
         "attack_bonus": 5,
         "damage": {"dice_count": 1, "dice_sides": 8, "modifier": 0},
         "damage_type": "fire",
-        "range": ["NEAR", "FAR"]
+        "range": ["RANGED"]
       }
     ],
     "abilities": [
       {
         "key": "arcane_snare",
         "name": "Arcane Snare",
-        "explanation": "Conjure a magical snare around one NEAR creature. It must pass a DC 13 Strength save or become Restrained for two turns. You can use this once before sleeping.",
-        "target": "one_perceptible_creature",
-        "range": ["NEAR"],
+        "explanation": "Conjure a magical snare around one valid creature. It must pass a DC 13 Strength save or become Restrained for two turns. You can use this once before sleeping.",
+        "target": "one_creature",
         "resolution": {"type": "saving_throw", "save": "strength", "dc": 13},
         "effect": {"type": "condition", "condition": "restrained", "turns": 2},
         "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
@@ -192,14 +220,27 @@
       {
         "key": "force_ward",
         "name": "Force Ward",
-        "explanation": "Protect yourself or a NEAR ally with magical force. Attacks against the protected character have one source of disadvantage until your next turn. You can use this once before sleeping.",
-        "target": "one_perceptible_character",
-        "range": ["ENGAGED", "NEAR"],
+        "explanation": "Protect yourself or one valid ally with magical force. Attacks against the protected character have one source of disadvantage until your next turn. You can use this once before sleeping.",
+        "target": "one_character",
         "resolution": {"type": "automatic"},
         "effect": {
           "type": "attacks_against_disadvantage",
           "sources": 1,
           "duration": "until_casters_next_turn"
+        },
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      },
+      {
+        "key": "arcane_insight",
+        "name": "Arcane Insight",
+        "category": "non_combat",
+        "explanation": "Focus your studies on magic, history, or strange writing. Gain one source of advantage on one applicable non-combat Knowledge or Investigation check. You can use this once before sleeping.",
+        "target": "self",
+        "resolution": {"type": "automatic"},
+        "effect": {
+          "type": "next_non_combat_check_advantage",
+          "skills": ["knowledge", "investigation"],
+          "sources": 1
         },
         "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
       }
@@ -211,7 +252,8 @@
       {"key": "chalk", "name": "Chalk", "quantity": 5},
       {"key": "magnifying_lens", "name": "Magnifying Lens", "quantity": 1},
       {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
-      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
+      {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
     "conditions": [],
     "location": null
@@ -239,23 +281,22 @@
         "name": "Staff",
         "attack_bonus": 2,
         "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 0},
-        "range": ["ENGAGED"]
+        "range": ["MELEE"]
       },
       {
         "key": "thorn_lash",
         "name": "Thorn Lash",
         "attack_bonus": 5,
         "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 0},
-        "range": ["NEAR"]
+        "range": ["RANGED"]
       }
     ],
     "abilities": [
       {
         "key": "healing_bloom",
         "name": "Healing Bloom",
-        "explanation": "Restore 1d8+3 HP to yourself or a NEAR ally. You can use this once before sleeping.",
-        "target": "one_perceptible_character",
-        "range": ["ENGAGED", "NEAR"],
+        "explanation": "Restore 1d8+3 HP to yourself or one valid ally. You can use this once before sleeping.",
+        "target": "one_character",
         "resolution": {"type": "automatic"},
         "effect": {
           "type": "heal",
@@ -266,11 +307,20 @@
       {
         "key": "entangling_roots",
         "name": "Entangling Roots",
-        "explanation": "Summon roots around one NEAR creature. It must pass a DC 13 Dexterity save or become Restrained for two turns. You can use this once before sleeping.",
-        "target": "one_perceptible_creature",
-        "range": ["NEAR"],
+        "explanation": "Summon roots around one valid creature. It must pass a DC 13 Dexterity save or become Restrained for two turns. You can use this once before sleeping.",
+        "target": "one_creature",
         "resolution": {"type": "saving_throw", "save": "dexterity", "dc": 13},
         "effect": {"type": "condition", "condition": "restrained", "turns": 2},
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      },
+      {
+        "key": "beast_speech",
+        "name": "Beast Speech",
+        "category": "non_combat",
+        "explanation": "Speak with one ordinary animal and understand its simple ideas for the current scene. You can use this once before sleeping.",
+        "target": "one_animal",
+        "resolution": {"type": "automatic"},
+        "effect": {"type": "communicate_with_animal", "duration": "scene"},
         "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
       }
     ],
@@ -281,7 +331,8 @@
       {"key": "waterskin", "name": "Waterskin", "quantity": 1},
       {"key": "animal_treats", "name": "Animal Treats", "quantity": 5},
       {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
-      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
+      {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
     "conditions": [],
     "location": null
@@ -309,22 +360,22 @@
         "name": "Rapier",
         "attack_bonus": 4,
         "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 2},
-        "range": ["ENGAGED"]
+        "range": ["MELEE"]
       },
       {
         "key": "vicious_verse",
         "name": "Vicious Verse",
         "attack_bonus": 5,
         "damage": {"dice_count": 1, "dice_sides": 6, "modifier": 0},
-        "range": ["NEAR", "FAR"]
+        "range": ["RANGED"]
       }
     ],
     "abilities": [
       {
         "key": "inspiring_song",
         "name": "Inspiring Song",
-        "explanation": "Encourage one ally who can perceive you, giving them one source of advantage on their next roll. You can use this once before sleeping.",
-        "target": "one_perceptible_ally",
+        "explanation": "Encourage one valid ally, giving them one source of advantage on their next roll. You can use this once before sleeping.",
+        "target": "one_ally",
         "resolution": {"type": "automatic"},
         "effect": {"type": "next_roll_advantage", "sources": 1},
         "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
@@ -332,10 +383,24 @@
       {
         "key": "cutting_words",
         "name": "Cutting Words",
-        "explanation": "Distract one enemy who can perceive you, giving them one source of disadvantage on their next roll. You can use this once before sleeping.",
-        "target": "one_perceptible_enemy",
+        "explanation": "Distract one valid enemy, giving them one source of disadvantage on their next roll. You can use this once before sleeping.",
+        "target": "one_enemy",
         "resolution": {"type": "automatic"},
         "effect": {"type": "next_roll_disadvantage", "sources": 1},
+        "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
+      },
+      {
+        "key": "silver_tongue",
+        "name": "Silver Tongue",
+        "category": "non_combat",
+        "explanation": "Choose your words or performance with uncanny care. Gain one source of advantage on one non-combat Persuasion, Deception, or Performance check. You can use this once before sleeping.",
+        "target": "self",
+        "resolution": {"type": "automatic"},
+        "effect": {
+          "type": "next_non_combat_check_advantage",
+          "skills": ["persuasion", "deception", "performance"],
+          "sources": 1
+        },
         "uses": {"remaining": 1, "maximum": 1, "recharge": "sleep"}
       }
     ],
@@ -346,7 +411,8 @@
       {"key": "fine_clothes", "name": "Fine Clothes", "quantity": 1},
       {"key": "notebook", "name": "Notebook", "quantity": 1},
       {"key": "phoenix_of_invincibility", "name": "Phoenix of Invincibility", "quantity": 1},
-      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1}
+      {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
+      {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
     "conditions": [],
     "location": null

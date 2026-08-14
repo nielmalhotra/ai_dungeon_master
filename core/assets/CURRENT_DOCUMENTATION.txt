@@ -34,6 +34,8 @@ Druid   - Specializes in Wisdom. Excels at perception, survival, intuition,
 Bard    - Specializes in Charisma. Excels at persuasion, deception,
           performance, and social influence.
 
+Every class has at least one explicitly non-combat ability or spell.
+
 SIMPLIFIED CHARACTER SHEET
 
 Identity records the character's name and class.
@@ -56,12 +58,23 @@ Conditions, current HP, ability uses, inventory quantities, and location are
 dynamic state and must remain current throughout the adventure.
 
 Every character begins with a Phoenix of Invincibility and a War-Hating God's
-Bow in addition to class-specific gear.
+Bow in addition to class-specific gear. Every character is also accompanied by
+a Fairy of Knowledge.
 
 Each character has a name, class, attributes, trained skills, strong saves,
 abilities, gear, conditions, and an independent location.
 [[future-combat]]Combat adds HP, AC, an Initiative modifier, and attacks.
 [[/future-combat]]
+
+SHARED KNOWLEDGE
+
+The Fairy of Knowledge instantly shares everything learned by any player
+character with all other player characters. The party therefore has one shared
+body of player-safe knowledge, even while its characters are separated. The
+system does not maintain independent player-character knowledge records.
+
+The Fairy never reveals DM-only information. A fact becomes shared only after a
+player character legitimately learns it through play.
 
 The six attributes are Strength, Dexterity, Constitution, Intelligence,
 Wisdom, and Charisma.
@@ -131,35 +144,34 @@ fail without a roll.
 
 If a clear action fails a precondition, that character's action is consumed and
 the other characters' actions continue resolving. The narration may remind the
-player of information the characters already know, but cannot reveal hidden
+player of shared information the party already knows, but cannot reveal hidden
 information.
 
 If a character is assigned multiple actions or the intended legal action is
 ambiguous, the entire party command pauses. No dice are rolled and no state is
 changed until the player clarifies the command.
 
-MOVEMENT AND LOCATION
+MOVEMENT, LOCATION, AND INTERACTION
 
-Distance uses three bands: ENGAGED, NEAR, and FAR. Normal movement changes
-distance by one band. [[future-combat]]Melee attacks require ENGAGED. Ranged
-attacks normally work at NEAR or FAR. Ranged attacks made while ENGAGED have
-disadvantage. Leaving ENGAGED does not trigger an opportunity attack.
-[[/future-combat]]
+Each character has an independent current location. Locations may be nested;
+for example, a farmhouse may be inside a farm that is inside a town. Movement
+changes a character's current location and may join or split scene groups.
 
-Each character has an independent location. Actions affect only the character's
-current location, and characters can interact only with perceptible targets.
-Characters at the same location form a scene group. Movement can join or split
-scene groups.
+Characters at the same current location can interact with each other. When
+characters or targets have different current locations, including locations in
+the same nested hierarchy, the AI decides whether the requested interaction is
+possible from the established fiction. The system does not store pairwise
+distance or perceptibility values between characters.
 
-NPCs and characters observe only events they can perceive at their location.
-Characters do not automatically share information learned while separated.
-[[future-combat]]Combat includes only creatures present at that location.
-[[/future-combat]]
+NPCs observe events according to their location and the established fiction.
+Player characters share everything any one of them learns through the Fairy of
+Knowledge, even while separated. [[future-combat]]Combat includes only creatures
+present at the relevant location.[[/future-combat]]
 
 CONDITIONS
 
-Prone: The character can only crawl, has disadvantage on attacks, and ENGAGED
-attackers have advantage against the character.
+Prone: The character can only crawl, has disadvantage on attacks, and attackers
+have advantage against the character.
 
 Restrained: Movement is zero, attacks against the character have advantage,
 the character's attacks have disadvantage, and Dexterity saving throws have
@@ -193,7 +205,8 @@ maximum HP and all limited-use abilities.
 WAR-HATING GOD'S BOW
 
 Every character possesses a War-Hating God's Bow. Using it consumes the
-character's action. Its target must exist and be perceptible to the character.
+character's action. Its target must exist and be a valid target under the
+location and interaction rules.
 The bow requires no attack or damage roll. It ignores AC, HP, advantage,
 disadvantage, and defensive abilities. It always hits and kills its target.
 [[/future-combat]]
@@ -209,10 +222,10 @@ actions. [[future-combat]]During combat, actions resolve in initiative order.
 [[/future-combat]]
 One submitted party command advances one global turn across every location.
 
-If an action targets someone who is not perceptible at the character's location,
-the action fails its precondition. The AI does not silently move or teleport the
-character. A movement plus an action is valid only when the requested movement
-can be completed within the character's movement allowance.
+If an action targets someone at another location, the AI decides whether the
+interaction is possible from the established fiction. The AI does not silently
+move or teleport the character. A movement plus an action is valid only when the
+requested movement can be completed within the character's movement allowance.
 
 GAME LOOP
 
@@ -220,7 +233,7 @@ The campaign begins with the authored opening and all characters at the authored
 starting location. The configured main quest is always active. Finishing the main
 quest completes the campaign; no further player actions or state changes occur.
 
-1. The DM describes the current scenes and perceptible facts.
+1. The DM describes the current scenes and facts available to the characters.
 2. The player submits the party command.
 3. The AI identifies each character's intention, dependencies, targets, and
    required resolution.

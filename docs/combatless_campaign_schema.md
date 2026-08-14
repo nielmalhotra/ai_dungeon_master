@@ -18,7 +18,13 @@ initialization contract for the combatless AI Dungeon Master.
   projections of relationship data, not a replacement for relationships.
 - `state_json` describes what an entity is like now. Historical changes belong
   in `WorldEvent` records.
-- Combat and per-character knowledge tracking remain outside the current scope.
+- Combat remains outside the current scope.
+- Player characters share player-safe knowledge through the Fairy of Knowledge,
+  so the system does not maintain independent player-character knowledge state.
+- The system does not store pairwise character distance or perceptibility state.
+  Character interaction is guaranteed at the same current location and is
+  otherwise adjudicated by the AI from the established fiction and nested
+  location hierarchy.
 
 ## Visibility
 
@@ -41,6 +47,12 @@ remember them. `dm_only` must never be sent to a player-facing response.
 
 An entity listed in `initially_known_entities_json` is known or introduced at
 campaign creation. That never makes its `dm_only` branch public.
+
+All player-safe information learned by any player character becomes shared
+party knowledge through the Fairy of Knowledge. The Fairy never reveals or
+shares `dm_only` information. Because this prototype intentionally has no
+per-character knowledge ledger, shared knowledge is represented by the campaign
+history and current public state rather than duplicated on each character.
 
 When a campaign is created, each entity instance receives a copy of its
 template's full visibility envelope. Later events and validated tools update the
@@ -204,6 +216,12 @@ Synchronized templates store resolved integer template IDs:
 
 Campaign instances store the same shape with runtime instance IDs. Runtime
 targets may additionally use the `character` type.
+
+Character relationships do not encode `engaged`, `near`, `far`, or perceptibility
+values. Each character's `current_location` is authoritative. Characters at the
+same current location can interact. When current locations differ, the AI uses
+the nested location hierarchy and established fiction to determine whether an
+interaction is possible.
 
 ## Campaign Model
 
