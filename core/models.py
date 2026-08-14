@@ -11,6 +11,15 @@ def empty_visibility_state():
     return {"public_info": {}, "dm_only": {}}
 
 
+def empty_initially_known_entities():
+    return {
+        "locations": [],
+        "npcs": [],
+        "quests": [],
+        "world_lore": [],
+    }
+
+
 class Visibility(models.TextChoices):
     PUBLIC_INFO = "public_info", "Public info"
     DM_ONLY = "dm_only", "DM only"
@@ -29,17 +38,37 @@ class CharacterTemplate(models.Model):
 
 
 class DndSession(models.Model):
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        COMPLETED = "completed", "Completed"
+        ABANDONED = "abandoned", "Abandoned"
+
     user = models.ForeignKey(User, on_delete=models.CASCADE, related_name="dnd_sessions")
-    active = models.BooleanField(default=True)
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
     scenario_key = models.CharField(max_length=64, default=settings.SCENARIO_KEY)
     scenario_version = models.PositiveIntegerField(default=1)
     turn_number = models.PositiveBigIntegerField(default=0)
+    opening_text = models.TextField(default="")
+    initially_known_entities_json = models.JSONField(
+        default=empty_initially_known_entities
+    )
     current_location = models.ForeignKey(
         "LocationInstance",
         null=True,
         blank=True,
         on_delete=models.SET_NULL,
         related_name="focused_sessions",
+    )
+    main_quest = models.ForeignKey(
+        "QuestInstance",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="main_for_sessions",
     )
     state_json = models.JSONField(default=empty_visibility_state)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -50,7 +79,7 @@ class DndSession(models.Model):
         constraints = [
             models.UniqueConstraint(
                 fields=["user"],
-                condition=Q(active=True),
+                condition=Q(status="active"),
                 name="one_active_dnd_session_per_user",
             )
         ]
@@ -62,7 +91,7 @@ class DndSession(models.Model):
         ]
 
     def __str__(self):
-        return f"{self.user.email} ({'active' if self.active else 'inactive'})"
+        return f"{self.user.email} ({self.status})"
 
 
 class CharacterInstance(models.Model):
@@ -82,6 +111,7 @@ class CharacterInstance(models.Model):
         related_name="characters",
     )
     state_json = models.JSONField(default=empty_visibility_state)
+    relationships_json = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -95,6 +125,11 @@ class CharacterInstance(models.Model):
 
 
 class LocationTemplate(models.Model):
+    class InitialStatus(models.TextChoices):
+        HIDDEN = "hidden", "Hidden"
+        ACTIVE = "active", "Active"
+        DESTROYED = "destroyed", "Destroyed"
+
     definition_uuid = models.UUIDField()
     scenario_key = models.CharField(max_length=64)
     version = models.PositiveIntegerField()
@@ -108,9 +143,13 @@ class LocationTemplate(models.Model):
         on_delete=models.PROTECT,
         related_name="child_templates",
     )
-    is_starting_location = models.BooleanField(default=False)
-    initially_known = models.BooleanField(default=False)
+    initial_status = models.CharField(
+        max_length=16,
+        choices=InitialStatus.choices,
+        default=InitialStatus.ACTIVE,
+    )
     definition_json = models.JSONField(default=empty_visibility_state)
+    relationships_json = models.JSONField(default=list)
     metadata_json = models.JSONField(default=dict)
     public_embedding = VectorField(
         dimensions=settings.EMBEDDING_DIMENSIONS,
@@ -132,11 +171,6 @@ class LocationTemplate(models.Model):
                 fields=["scenario_key", "version", "definition_uuid"],
                 name="uniq_location_tpl_uuid",
             ),
-            models.UniqueConstraint(
-                fields=["scenario_key", "version"],
-                condition=Q(is_starting_location=True),
-                name="uniq_start_location_tpl",
-            ),
         ]
         indexes = [
             models.Index(
@@ -151,10 +185,9 @@ class LocationTemplate(models.Model):
 
 class LocationInstance(models.Model):
     class Status(models.TextChoices):
+        HIDDEN = "hidden", "Hidden"
         ACTIVE = "active", "Active"
-        INACCESSIBLE = "inaccessible", "Inaccessible"
         DESTROYED = "destroyed", "Destroyed"
-        UNKNOWN = "unknown", "Unknown"
 
     dnd_session = models.ForeignKey(
         DndSession,
@@ -182,6 +215,7 @@ class LocationInstance(models.Model):
         default=Status.ACTIVE,
     )
     state_json = models.JSONField(default=empty_visibility_state)
+    relationships_json = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -206,6 +240,11 @@ class LocationInstance(models.Model):
 
 
 class NPCTemplate(models.Model):
+    class InitialStatus(models.TextChoices):
+        HIDDEN = "hidden", "Hidden"
+        ACTIVE = "active", "Active"
+        DEAD = "dead", "Dead"
+
     definition_uuid = models.UUIDField()
     scenario_key = models.CharField(max_length=64)
     version = models.PositiveIntegerField()
@@ -219,8 +258,13 @@ class NPCTemplate(models.Model):
         on_delete=models.PROTECT,
         related_name="initial_npc_templates",
     )
-    initially_known = models.BooleanField(default=False)
+    initial_status = models.CharField(
+        max_length=16,
+        choices=InitialStatus.choices,
+        default=InitialStatus.ACTIVE,
+    )
     definition_json = models.JSONField(default=empty_visibility_state)
+    relationships_json = models.JSONField(default=list)
     metadata_json = models.JSONField(default=dict)
     public_embedding = VectorField(
         dimensions=settings.EMBEDDING_DIMENSIONS,
@@ -256,10 +300,9 @@ class NPCTemplate(models.Model):
 
 class NPCInstance(models.Model):
     class Status(models.TextChoices):
+        HIDDEN = "hidden", "Hidden"
         ACTIVE = "active", "Active"
-        MISSING = "missing", "Missing"
         DEAD = "dead", "Dead"
-        DEPARTED = "departed", "Departed"
 
     dnd_session = models.ForeignKey(
         DndSession,
@@ -287,6 +330,7 @@ class NPCInstance(models.Model):
         default=Status.ACTIVE,
     )
     state_json = models.JSONField(default=empty_visibility_state)
+    relationships_json = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
 
@@ -315,6 +359,7 @@ class QuestTemplate(models.Model):
         HIDDEN = "hidden", "Hidden"
         AVAILABLE = "available", "Available"
         ACTIVE = "active", "Active"
+        FINISHED = "finished", "Finished"
 
     definition_uuid = models.UUIDField()
     scenario_key = models.CharField(max_length=64)
@@ -327,9 +372,8 @@ class QuestTemplate(models.Model):
         choices=InitialStatus.choices,
         default=InitialStatus.HIDDEN,
     )
-    initially_known = models.BooleanField(default=False)
     definition_json = models.JSONField(default=empty_visibility_state)
-    related_templates_json = models.JSONField(default=list)
+    relationships_json = models.JSONField(default=list)
     metadata_json = models.JSONField(default=dict)
     public_embedding = VectorField(
         dimensions=settings.EMBEDDING_DIMENSIONS,
@@ -368,8 +412,7 @@ class QuestInstance(models.Model):
         HIDDEN = "hidden", "Hidden"
         AVAILABLE = "available", "Available"
         ACTIVE = "active", "Active"
-        COMPLETED = "completed", "Completed"
-        FAILED = "failed", "Failed"
+        FINISHED = "finished", "Finished"
 
     dnd_session = models.ForeignKey(
         DndSession,
@@ -390,7 +433,7 @@ class QuestInstance(models.Model):
         default=Status.HIDDEN,
     )
     current_stage = models.PositiveIntegerField(default=0)
-    related_entities_json = models.JSONField(default=list)
+    relationships_json = models.JSONField(default=list)
     state_json = models.JSONField(default=empty_visibility_state)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -425,8 +468,8 @@ class WorldLoreChunkTemplate(models.Model):
     section = models.CharField(max_length=200)
     chunk_number = models.PositiveIntegerField()
     visibility = models.CharField(max_length=16, choices=Visibility.choices)
-    initially_known = models.BooleanField(default=False)
     content = models.TextField()
+    relationships_json = models.JSONField(default=list)
     metadata_json = models.JSONField(default=dict)
     embedding = VectorField(dimensions=settings.EMBEDDING_DIMENSIONS)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -443,10 +486,6 @@ class WorldLoreChunkTemplate(models.Model):
                     "chunk_number",
                 ],
                 name="uniq_lore_tpl_chunk",
-            ),
-            models.CheckConstraint(
-                check=Q(initially_known=False) | Q(visibility=Visibility.PUBLIC_INFO),
-                name="lore_known_public_ck",
             ),
         ]
         indexes = [
@@ -471,6 +510,7 @@ class WorldLore(models.Model):
         on_delete=models.PROTECT,
         related_name="campaign_lore",
     )
+    relationships_json = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
 
     class Meta:

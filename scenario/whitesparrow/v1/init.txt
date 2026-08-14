@@ -1,0 +1,26 @@
+STARTING LOCATION:
+
+94546ab4-3d58-40e2-af49-70753e784f25
+
+MAIN QUEST:
+
+4b802d31-63b9-4467-9710-b7b5b2c0b793
+
+OPENING:
+
+Light rain falls as the party arrives in Whitesparrow, a mountain village living
+under the shadow of the returning Night Blades. The villagers need someone to
+discover who leads the bandits and what they want.
+
+KNOWN ENTITIES:
+
+94546ab4-3d58-40e2-af49-70753e784f25
+4b802d31-63b9-4467-9710-b7b5b2c0b793
+d5218545-8822-4b1e-8b76-d5196cc584dc
+
+DM_ONLY:
+
+The party begins in Whitesparrow Village. The masked Night Lord's plan is more
+complicated than ordinary robbery, and Sheriff Ruth Willowmane's personal history
+with Ralavaz may distort her judgment. When the main quest is finished, narrate a
+conclusive ending; the campaign accepts no further actions afterward.

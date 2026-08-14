@@ -1,14 +1,17 @@
-Definition UUID: db1041ba-2f74-44db-ba91-ef7408afff1a
-Name: Sheriff Ruth Willowmane
-Initial Location UUID: 94546ab4-3d58-40e2-af49-70753e784f25
-Initially Known: false
+UUID: db1041ba-2f74-44db-ba91-ef7408afff1a
+NAME: Sheriff Ruth Willowmane
+INITIAL STATUS: active
 
-# Public Info
+RELATIONSHIPS:
+
+located_in | location | 94546ab4-3d58-40e2-af49-70753e784f25
+
+PUBLIC:
 
 Ruth Willowmane is Whitesparrow's veteran sheriff. She is direct, watchful, and
 protective of the village. Eight permanent guards answer to her.
 
-# DM Only
+DM_ONLY:
 
 Ruth believes Ralavaz murdered her younger brother Dronder eleven years ago. Her
 anger is personal, but she still wants Ralavaz captured and tried rather than

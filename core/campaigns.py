@@ -14,6 +14,7 @@ from .models import (
     WorldLore,
     WorldLoreChunkTemplate,
 )
+from .scenario_lore import grouped_known_entities, load_scenario_release
 
 
 class CampaignCreationError(RuntimeError):
@@ -21,6 +22,10 @@ class CampaignCreationError(RuntimeError):
 
 
 class ScenarioNotReadyError(CampaignCreationError):
+    pass
+
+
+class CampaignNotActiveError(RuntimeError):
     pass
 
 
@@ -55,7 +60,6 @@ def _active_scenario_templates(scenario_key):
         raise ScenarioNotReadyError(
             f"Scenario {scenario_key!r} does not have a complete active release."
         )
-
     versions = {
         template.version
         for templates in template_groups.values()
@@ -65,27 +69,7 @@ def _active_scenario_templates(scenario_key):
         raise ScenarioNotReadyError(
             f"Scenario {scenario_key!r} has inconsistent active template versions."
         )
-
-    starting_locations = [
-        template
-        for template in template_groups["locations"]
-        if template.is_starting_location
-    ]
-    if len(starting_locations) != 1:
-        raise ScenarioNotReadyError(
-            f"Scenario {scenario_key!r} must have one active starting location."
-        )
-    return versions.pop(), template_groups, starting_locations[0]
-
-
-def _initial_entity_state(template):
-    definition = deepcopy(template.definition_json)
-    return {
-        "public_info": (
-            definition.get("public_info", {}) if template.initially_known else {}
-        ),
-        "dm_only": definition.get("dm_only", {}),
-    }
+    return versions.pop(), template_groups
 
 
 def _validate_selected_characters(selected_characters):
@@ -98,33 +82,102 @@ def _validate_selected_characters(selected_characters):
         raise CampaignCreationError("Every character requires a name.")
 
 
-def _runtime_reference(template_reference, runtime_by_template):
-    entity_type = template_reference["type"]
-    template_id = template_reference["id"]
-    runtime_entity = runtime_by_template.get((entity_type, template_id))
-    if runtime_entity is None:
+def _templates_by_definition(templates):
+    grouped = {}
+    for template_type, group_name in (
+        ("location", "locations"),
+        ("npc", "npcs"),
+        ("quest", "quests"),
+        ("world_lore", "world_lore"),
+    ):
+        for template in templates[group_name]:
+            grouped.setdefault(
+                (template_type, template.definition_uuid),
+                [],
+            ).append(template)
+    return grouped
+
+
+def _verify_release_matches_templates(release, templates_by_definition):
+    for definition in release.definitions:
+        if not templates_by_definition.get(
+            (definition.definition_type, definition.definition_uuid)
+        ):
+            raise ScenarioNotReadyError(
+                f"Active templates are missing {definition.source_file}."
+            )
+    expected_definitions = {
+        (definition.definition_type, definition.definition_uuid)
+        for definition in release.definitions
+    }
+    if set(templates_by_definition) != expected_definitions:
         raise ScenarioNotReadyError(
-            f"Scenario relationship references missing {entity_type} template "
-            f"{template_id}."
+            "Active templates do not match the synchronized scenario release."
         )
-    return {"type": entity_type, "id": runtime_entity.id}
+
+
+def _runtime_relationships(template, runtime_by_template):
+    relationships = []
+    for relationship in template.relationships_json:
+        target = relationship["target"]
+        runtime_entity = runtime_by_template.get((target["type"], target["id"]))
+        if runtime_entity is None:
+            raise ScenarioNotReadyError(
+                f"Scenario relationship references missing {target['type']} "
+                f"template {target['id']}."
+            )
+        relationships.append(
+            {
+                "relation": relationship["relation"],
+                "target": {
+                    "type": target["type"],
+                    "id": runtime_entity.id,
+                },
+            }
+        )
+    return relationships
 
 
 @transaction.atomic
-def create_campaign(*, user, selected_characters, scenario_key):
+def create_campaign(
+    *,
+    user,
+    selected_characters,
+    scenario_key,
+    scenario_dir=None,
+):
     _validate_selected_characters(selected_characters)
     user = type(user).objects.select_for_update().get(pk=user.pk)
-    if DndSession.objects.filter(user=user, active=True).exists():
+    if DndSession.objects.filter(
+        user=user,
+        status=DndSession.Status.ACTIVE,
+    ).exists():
         raise CampaignCreationError("The user already has an active campaign.")
 
-    version, templates, starting_location_template = _active_scenario_templates(
-        scenario_key
+    version, templates = _active_scenario_templates(scenario_key)
+    release = load_scenario_release(
+        scenario_dir=scenario_dir,
+        scenario_key=scenario_key,
+        version=version,
     )
+    templates_by_definition = _templates_by_definition(templates)
+    _verify_release_matches_templates(release, templates_by_definition)
+
     campaign = DndSession.objects.create(
         user=user,
-        active=True,
+        status=DndSession.Status.ACTIVE,
         scenario_key=scenario_key,
         scenario_version=version,
+        opening_text=release.initialization.opening,
+        initially_known_entities_json=grouped_known_entities(release),
+        state_json={
+            "public_info": {},
+            "dm_only": (
+                {"summary": release.initialization.dm_only}
+                if release.initialization.dm_only
+                else {}
+            ),
+        },
     )
 
     locations_by_template = {}
@@ -133,7 +186,8 @@ def create_campaign(*, user, selected_characters, scenario_key):
             dnd_session=campaign,
             template=template,
             name=template.name,
-            state_json=_initial_entity_state(template),
+            status=template.initial_status,
+            state_json=deepcopy(template.definition_json),
         )
     for template in templates["locations"]:
         if template.parent_template_id:
@@ -154,17 +208,25 @@ def create_campaign(*, user, selected_characters, scenario_key):
                 if template.initial_location_template_id
                 else None
             ),
-            state_json=_initial_entity_state(template),
+            status=template.initial_status,
+            state_json=deepcopy(template.definition_json),
         )
 
     quests_by_template = {}
+    main_quest_template = templates_by_definition[
+        ("quest", release.initialization.main_quest_uuid)
+    ][0]
     for template in templates["quests"]:
         quests_by_template[template.id] = QuestInstance.objects.create(
             dnd_session=campaign,
             template=template,
             title=template.title,
-            status=template.initial_status,
-            state_json=_initial_entity_state(template),
+            status=(
+                QuestInstance.Status.ACTIVE
+                if template.id == main_quest_template.id
+                else template.initial_status
+            ),
+            state_json=deepcopy(template.definition_json),
         )
 
     lore_by_template = {}
@@ -192,14 +254,23 @@ def create_campaign(*, user, selected_characters, scenario_key):
         for template_id, instance in lore_by_template.items()
     )
 
-    for template in templates["quests"]:
-        quest = quests_by_template[template.id]
-        quest.related_entities_json = [
-            _runtime_reference(reference, runtime_by_template)
-            for reference in template.related_templates_json
-        ]
-        quest.save(update_fields=["related_entities_json"])
+    for template_group, instances in (
+        (templates["locations"], locations_by_template),
+        (templates["npcs"], npcs_by_template),
+        (templates["quests"], quests_by_template),
+        (templates["world_lore"], lore_by_template),
+    ):
+        for template in template_group:
+            instance = instances[template.id]
+            instance.relationships_json = _runtime_relationships(
+                template,
+                runtime_by_template,
+            )
+            instance.save(update_fields=["relationships_json"])
 
+    starting_location_template = templates_by_definition[
+        ("location", release.initialization.starting_location_uuid)
+    ][0]
     starting_location = locations_by_template[starting_location_template.id]
     for template, name in selected_characters:
         CharacterInstance.objects.create(
@@ -208,15 +279,47 @@ def create_campaign(*, user, selected_characters, scenario_key):
             template_json=deepcopy(template.character_template),
             mechanics_json=deepcopy(template.character_template),
             current_location=starting_location,
+            relationships_json=[
+                {
+                    "relation": "located_in",
+                    "target": {
+                        "type": "location",
+                        "id": starting_location.id,
+                    },
+                }
+            ],
         )
 
-    starting_state = _initial_entity_state(starting_location_template)
     campaign.current_location = starting_location
-    campaign.state_json = {
-        "public_info": deepcopy(starting_state["public_info"]),
-        "dm_only": deepcopy(starting_state["dm_only"]),
-    }
+    campaign.main_quest = quests_by_template[main_quest_template.id]
     campaign.save(
-        update_fields=["current_location", "state_json", "updated_at"]
+        update_fields=["current_location", "main_quest", "updated_at"]
     )
+    return campaign
+
+
+@transaction.atomic
+def finish_quest(quest):
+    quest = QuestInstance.objects.select_for_update().select_related(
+        "dnd_session"
+    ).get(pk=quest.pk)
+    campaign = DndSession.objects.select_for_update().get(
+        pk=quest.dnd_session_id
+    )
+    if campaign.status != DndSession.Status.ACTIVE:
+        raise CampaignNotActiveError("The campaign no longer accepts changes.")
+    quest.status = QuestInstance.Status.FINISHED
+    quest.save(update_fields=["status", "updated_at"])
+    if campaign.main_quest_id == quest.id:
+        campaign.status = DndSession.Status.COMPLETED
+        campaign.save(update_fields=["status", "updated_at"])
+    return campaign.status == DndSession.Status.COMPLETED
+
+
+@transaction.atomic
+def abandon_campaign(campaign):
+    campaign = DndSession.objects.select_for_update().get(pk=campaign.pk)
+    if campaign.status == DndSession.Status.ACTIVE:
+        campaign.status = DndSession.Status.ABANDONED
+        campaign.save(update_fields=["status", "updated_at"])
     return campaign

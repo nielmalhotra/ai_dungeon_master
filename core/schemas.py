@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field
 
 
 JsonObject = Dict[str, Any]
@@ -83,6 +83,35 @@ class TemplateEntityReference(BaseModel):
     id: int = Field(gt=0)
 
 
+class TemplateRelationship(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    relation: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    target: TemplateEntityReference
+
+
+class RuntimeRelationship(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    relation: str = Field(pattern=r"^[a-z][a-z0-9_]*$")
+    target: RuntimeEntityReference
+
+
+class InitiallyKnownEntities(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    locations: List[UUID] = Field(default_factory=list)
+    npcs: List[UUID] = Field(default_factory=list)
+    quests: List[UUID] = Field(default_factory=list)
+    world_lore: List[UUID] = Field(default_factory=list)
+
+
+class DndSessionStatus(str, Enum):
+    ACTIVE = "active"
+    COMPLETED = "completed"
+    ABANDONED = "abandoned"
+
+
 class CharacterTemplateRecord(OrmSchema):
     id: int = Field(gt=0)
     template_key: str
@@ -92,11 +121,14 @@ class CharacterTemplateRecord(OrmSchema):
 class DndSessionRecord(OrmSchema):
     id: int = Field(gt=0)
     user_id: int = Field(gt=0)
-    active: bool
+    status: DndSessionStatus
     scenario_key: str
     scenario_version: int = Field(ge=1)
     turn_number: int = Field(ge=0)
+    opening_text: str
+    initially_known_entities_json: InitiallyKnownEntities
     current_location_id: Optional[int] = Field(default=None, gt=0)
+    main_quest_id: Optional[int] = Field(default=None, gt=0)
     state_json: CampaignState
     created_at: datetime
     updated_at: datetime
@@ -110,6 +142,7 @@ class CharacterInstanceRecord(OrmSchema):
     mechanics_json: JsonObject
     current_location_id: Optional[int] = Field(default=None, gt=0)
     state_json: CharacterNarrativeState
+    relationships_json: List[RuntimeRelationship] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -127,19 +160,18 @@ class VersionedTemplateRecord(OrmSchema):
 class LocationTemplateRecord(VersionedTemplateRecord):
     name: str
     parent_template_id: Optional[int] = Field(default=None, gt=0)
-    is_starting_location: bool
-    initially_known: bool
+    initial_status: "LocationStatus"
     definition_json: TemplateDefinition
+    relationships_json: List[TemplateRelationship] = Field(default_factory=list)
     metadata_json: JsonObject
     public_embedding: Optional[List[float]] = None
     dm_embedding: Optional[List[float]] = None
 
 
 class LocationStatus(str, Enum):
+    HIDDEN = "hidden"
     ACTIVE = "active"
-    INACCESSIBLE = "inaccessible"
     DESTROYED = "destroyed"
-    UNKNOWN = "unknown"
 
 
 class LocationInstanceRecord(OrmSchema):
@@ -150,6 +182,7 @@ class LocationInstanceRecord(OrmSchema):
     parent_location_id: Optional[int] = Field(default=None, gt=0)
     status: LocationStatus
     state_json: LocationState
+    relationships_json: List[RuntimeRelationship] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -157,18 +190,18 @@ class LocationInstanceRecord(OrmSchema):
 class NPCTemplateRecord(VersionedTemplateRecord):
     name: str
     initial_location_template_id: Optional[int] = Field(default=None, gt=0)
-    initially_known: bool
+    initial_status: "NPCStatus"
     definition_json: TemplateDefinition
+    relationships_json: List[TemplateRelationship] = Field(default_factory=list)
     metadata_json: JsonObject
     public_embedding: Optional[List[float]] = None
     dm_embedding: Optional[List[float]] = None
 
 
 class NPCStatus(str, Enum):
+    HIDDEN = "hidden"
     ACTIVE = "active"
-    MISSING = "missing"
     DEAD = "dead"
-    DEPARTED = "departed"
 
 
 class NPCInstanceRecord(OrmSchema):
@@ -179,6 +212,7 @@ class NPCInstanceRecord(OrmSchema):
     current_location_id: Optional[int] = Field(default=None, gt=0)
     status: NPCStatus
     state_json: NPCState
+    relationships_json: List[RuntimeRelationship] = Field(default_factory=list)
     created_at: datetime
     updated_at: datetime
 
@@ -187,14 +221,14 @@ class QuestInitialStatus(str, Enum):
     HIDDEN = "hidden"
     AVAILABLE = "available"
     ACTIVE = "active"
+    FINISHED = "finished"
 
 
 class QuestTemplateRecord(VersionedTemplateRecord):
     title: str
     initial_status: QuestInitialStatus
-    initially_known: bool
     definition_json: TemplateDefinition
-    related_templates_json: List[TemplateEntityReference] = Field(default_factory=list)
+    relationships_json: List[TemplateRelationship] = Field(default_factory=list)
     metadata_json: JsonObject
     public_embedding: Optional[List[float]] = None
     dm_embedding: Optional[List[float]] = None
@@ -204,8 +238,7 @@ class QuestStatus(str, Enum):
     HIDDEN = "hidden"
     AVAILABLE = "available"
     ACTIVE = "active"
-    COMPLETED = "completed"
-    FAILED = "failed"
+    FINISHED = "finished"
 
 
 class QuestInstanceRecord(OrmSchema):
@@ -215,7 +248,7 @@ class QuestInstanceRecord(OrmSchema):
     title: str
     status: QuestStatus
     current_stage: int = Field(ge=0)
-    related_entities_json: List[RuntimeEntityReference] = Field(default_factory=list)
+    relationships_json: List[RuntimeRelationship] = Field(default_factory=list)
     state_json: QuestState
     created_at: datetime
     updated_at: datetime
@@ -226,22 +259,17 @@ class WorldLoreChunkTemplateRecord(VersionedTemplateRecord):
     section: str
     chunk_number: int = Field(ge=1)
     visibility: VisibilityValue
-    initially_known: bool
     content: str
+    relationships_json: List[TemplateRelationship] = Field(default_factory=list)
     metadata_json: JsonObject
     embedding: List[float]
-
-    @model_validator(mode="after")
-    def known_lore_must_be_public(self):
-        if self.initially_known and self.visibility != VisibilityValue.PUBLIC_INFO:
-            raise ValueError("Initially known lore must have public_info visibility.")
-        return self
 
 
 class WorldLoreRecord(OrmSchema):
     id: int = Field(gt=0)
     dnd_session_id: int = Field(gt=0)
     template_id: int = Field(gt=0)
+    relationships_json: List[RuntimeRelationship] = Field(default_factory=list)
     created_at: datetime
 
 
@@ -381,6 +409,7 @@ class CreateNPCInput(BaseModel):
     name: str
     current_location_id: Optional[int] = Field(default=None, gt=0)
     state_json: NPCState
+    relationships: List[RuntimeRelationship] = Field(default_factory=list)
 
 
 class CreateLocationInput(BaseModel):
@@ -389,6 +418,7 @@ class CreateLocationInput(BaseModel):
     name: str
     parent_location_id: Optional[int] = Field(default=None, gt=0)
     state_json: LocationState
+    relationships: List[RuntimeRelationship] = Field(default_factory=list)
 
 
 class CreateQuestInput(BaseModel):
@@ -396,7 +426,7 @@ class CreateQuestInput(BaseModel):
 
     title: str
     status: QuestStatus = QuestStatus.HIDDEN
-    related_entities: List[RuntimeEntityReference] = Field(default_factory=list)
+    relationships: List[RuntimeRelationship] = Field(default_factory=list)
     state_json: QuestState
 
 

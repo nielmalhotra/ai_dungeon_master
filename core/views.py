@@ -2,6 +2,7 @@ from pathlib import Path
 
 from django.conf import settings
 from django.contrib.auth.decorators import login_required
+from django.db import models
 from django.shortcuts import redirect, render
 from django.utils.html import escape
 from django.utils.safestring import mark_safe
@@ -9,7 +10,7 @@ from django.views.decorators.http import require_POST
 
 from accounts.models import User as AppUser
 
-from .campaigns import ScenarioNotReadyError, create_campaign
+from .campaigns import ScenarioNotReadyError, abandon_campaign, create_campaign
 from .forms import CreateGameForm
 from .models import (
     CharacterTemplate,
@@ -60,14 +61,23 @@ def _character_options(character_templates, form):
     ]
 
 
-def _active_session_for(request):
+def _current_session_for(request):
     if not request.user.is_authenticated:
         return None
-    return (
-        DndSession.objects.filter(user__email=request.user.email, active=True)
-        .prefetch_related("characters")
-        .first()
-    )
+    sessions = DndSession.objects.filter(
+        user__email=request.user.email,
+        status__in=(
+            DndSession.Status.ACTIVE,
+            DndSession.Status.COMPLETED,
+        ),
+    ).prefetch_related("characters")
+    return sessions.order_by(
+        models.Case(
+            models.When(status=DndSession.Status.ACTIVE, then=0),
+            default=1,
+        ),
+        "-updated_at",
+    ).first()
 
 
 def _character_sheets(active_session):
@@ -94,7 +104,7 @@ def _character_sheets(active_session):
 
 def home(request):
     current_documentation = _render_current_documentation()
-    active_session = _active_session_for(request)
+    active_session = _current_session_for(request)
     character_templates = list(CharacterTemplate.objects.all())
     create_game_form = None
 
@@ -139,8 +149,10 @@ def home(request):
 @login_required
 @require_POST
 def quit_session(request):
-    DndSession.objects.filter(
+    campaign = DndSession.objects.filter(
         user__email=request.user.email,
-        active=True,
-    ).update(active=False)
+        status=DndSession.Status.ACTIVE,
+    ).first()
+    if campaign:
+        abandon_campaign(campaign)
     return redirect("home")

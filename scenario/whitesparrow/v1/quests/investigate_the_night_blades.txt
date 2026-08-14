@@ -1,16 +1,18 @@
-Definition UUID: 4b802d31-63b9-4467-9710-b7b5b2c0b793
-Title: Investigate the Night Blades
-Initial Status: available
-Initially Known: true
-Related NPC UUID: db1041ba-2f74-44db-ba91-ef7408afff1a
-Related Location UUID: 94546ab4-3d58-40e2-af49-70753e784f25
+UUID: 4b802d31-63b9-4467-9710-b7b5b2c0b793
+NAME: Investigate the Night Blades
+INITIAL STATUS: available
 
-# Public Info
+RELATIONSHIPS:
+
+involves | npc | db1041ba-2f74-44db-ba91-ef7408afff1a
+involves | location | 94546ab4-3d58-40e2-af49-70753e784f25
+
+PUBLIC:
 
 Armed bandits claiming the name of the Night Blades have returned to the valley.
 Whitesparrow needs someone to discover who leads them and what they want.
 
-# DM Only
+DM_ONLY:
 
 The masked Night Lord is using the gang's reputation for a plan more complicated
 than ordinary robbery. Ruth can provide local authority and leads, but her history

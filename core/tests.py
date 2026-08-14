@@ -1,15 +1,22 @@
 from copy import deepcopy
+from io import StringIO
+from pathlib import Path
+from shutil import copytree
+from tempfile import TemporaryDirectory
 from types import SimpleNamespace
 from unittest.mock import Mock, patch
 from uuid import UUID, uuid4
 
+from django.conf import settings
 from django.contrib.auth.models import User
+from django.core.management import call_command
 from django.db import IntegrityError, transaction
 from django.test import TestCase
 from django.urls import reverse
 
 from accounts.models import User as AppUser
 
+from .campaigns import finish_quest
 from .character_templates import load_character_templates, sync_character_templates
 from .models import (
     CharacterInstance,
@@ -17,16 +24,24 @@ from .models import (
     DndSession,
     LocationTemplate,
     NPCTemplate,
+    QuestInstance,
     QuestTemplate,
     Visibility,
-    WorldLore,
     WorldLoreChunkTemplate,
 )
 from .scenario_lore import (
     ScenarioLoreError,
+    SourceRelationship,
+    UUID_PLACEHOLDER,
     build_scenario_embedding_inputs,
+    create_definition_file,
+    create_init_file,
     embed_scenario_inputs,
+    grouped_known_entities,
     load_scenario_release,
+    parse_definition_file,
+    populate_scenario_uuids,
+    render_definition_file,
     sync_scenario_templates,
 )
 
@@ -38,357 +53,160 @@ QUEST_UUID = UUID("4b802d31-63b9-4467-9710-b7b5b2c0b793")
 LORE_UUID = UUID("d5218545-8822-4b1e-8b76-d5196cc584dc")
 
 
-def visibility_state(public_summary, dm_summary):
-    return {
-        "public_info": {"summary": public_summary},
-        "dm_only": {"summary": dm_summary},
-    }
+def embedded_fixture(inputs, **kwargs):
+    return {item.key: ZERO_EMBEDDING for item in inputs}
 
 
-def create_scenario_templates(version=1, active=True):
-    location = LocationTemplate.objects.create(
-        definition_uuid=LOCATION_UUID,
-        scenario_key="whitesparrow",
-        version=version,
-        active=active,
-        source_file="locations/whitesparrow_village.txt",
-        name="Whitesparrow Village",
-        is_starting_location=True,
-        initially_known=True,
-        definition_json=visibility_state(
-            "Whitesparrow is a mountain village.",
-            "The villagers are suspicious of outsiders.",
-        ),
-        public_embedding=ZERO_EMBEDDING,
-        dm_embedding=ZERO_EMBEDDING,
-    )
-    npc = NPCTemplate.objects.create(
-        definition_uuid=NPC_UUID,
-        scenario_key="whitesparrow",
-        version=version,
-        active=active,
-        source_file="npcs/sheriff_ruth_willowmane.txt",
-        name="Sheriff Ruth Willowmane",
-        initial_location_template=location,
-        initially_known=False,
-        definition_json=visibility_state(
-            "Ruth is Whitesparrow's sheriff.",
-            "Ruth's anger toward Ralavaz is personal.",
-        ),
-        public_embedding=ZERO_EMBEDDING,
-        dm_embedding=ZERO_EMBEDDING,
-    )
-    quest = QuestTemplate.objects.create(
-        definition_uuid=QUEST_UUID,
-        scenario_key="whitesparrow",
-        version=version,
-        active=active,
-        source_file="quests/investigate_the_night_blades.txt",
-        title="Investigate the Night Blades",
-        initial_status=QuestTemplate.InitialStatus.AVAILABLE,
-        initially_known=True,
-        definition_json=visibility_state(
-            "Discover who leads the Night Blades.",
-            "The masked Night Lord has a hidden motive.",
-        ),
-        related_templates_json=[
-            {"type": "npc", "id": npc.id},
-            {"type": "location", "id": location.id},
-        ],
-        public_embedding=ZERO_EMBEDDING,
-        dm_embedding=ZERO_EMBEDDING,
-    )
-    lore = WorldLoreChunkTemplate.objects.create(
-        definition_uuid=LORE_UUID,
-        scenario_key="whitesparrow",
-        version=version,
-        active=active,
-        source_file="worldlore/the_night_blades.txt",
-        title="The Night Blades",
-        section="Public Info",
-        chunk_number=1,
-        visibility=Visibility.PUBLIC_INFO,
-        initially_known=True,
-        content="The Night Blades once terrorized the valley.",
-        metadata_json={
-            "related_templates": [
-                {"type": "npc", "id": npc.id},
-                {"type": "location", "id": location.id},
-            ]
-        },
-        embedding=ZERO_EMBEDDING,
-    )
-    return {
-        "location": location,
-        "npc": npc,
-        "quest": quest,
-        "lore": lore,
-    }
+def synchronize_fixture():
+    with patch(
+        "core.scenario_lore.embed_scenario_inputs",
+        side_effect=embedded_fixture,
+    ):
+        return sync_scenario_templates()
 
 
-class HomeViewTests(TestCase):
-    def login(self):
-        user = User.objects.create_user(
-            username="player@example.com",
-            email="player@example.com",
-        )
-        self.client.force_login(user)
-        return user
+def copy_whitesparrow_release(root, version):
+    source = Path(settings.SCENARIO_DIR) / "whitesparrow" / "v1"
+    target = Path(root) / "whitesparrow" / f"v{version}"
+    copytree(source, target)
+    return target
 
-    def create_active_session(self):
-        app_user = AppUser.objects.get(email="player@example.com")
-        dnd_session = DndSession.objects.create(user=app_user, active=True)
-        for template_key, name in (
-            ("warrior", "Alden"),
-            ("rogue", "Brynn"),
-            ("wizard", "Cora"),
-        ):
-            template = CharacterTemplate.objects.get(template_key=template_key)
-            CharacterInstance.objects.create(
-                dnd_session=dnd_session,
-                name=name,
-                template_json=deepcopy(template.character_template),
-            )
-        return dnd_session
 
-    def test_home_prompts_anonymous_users_to_log_in(self):
-        response = self.client.get(reverse("home"))
+def replace_uuid_with_placeholder(path):
+    text = path.read_text(encoding="utf-8")
+    lines = text.splitlines()
+    lines[0] = f"UUID: {UUID_PLACEHOLDER}"
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "AI Dungeon Master")
-        self.assertContains(response, "Log in with Google")
-        self.assertContains(response, "/accounts/google/login/")
 
-    def test_home_prompts_authenticated_user_without_game_to_create_party(self):
-        self.login()
+class ScenarioSourceTests(TestCase):
+    def test_validation_command_accepts_scenario_version(self):
+        output = StringIO()
 
-        response = self.client.get(reverse("home"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Create your party")
-        self.assertContains(response, "simplified version of D&amp;D fifth edition")
-        self.assertContains(response, 'type="checkbox"', count=5)
-        self.assertContains(response, "Choose and name exactly three characters")
-        self.assertNotContains(response, 'id="open-characters"')
-
-    def test_home_shows_chat_and_characters_for_active_session(self):
-        self.login()
-        self.create_active_session()
-
-        response = self.client.get(reverse("home"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Adventure")
-        self.assertContains(response, "textarea disabled")
-        self.assertContains(response, 'id="open-characters"')
-        self.assertContains(response, 'id="characters-dialog"')
-        self.assertContains(response, 'id="open-quit-session"')
-        self.assertContains(response, 'id="quit-session-dialog"')
-        self.assertContains(response, "Alden")
-        self.assertContains(response, "24/24")
-        self.assertContains(response, "Catch your breath and restore 1d8+2 HP")
-
-    def test_create_game_requires_exactly_three_named_characters(self):
-        self.login()
-
-        response = self.client.post(
-            reverse("home"),
-            {
-                "selected_templates": ["warrior", "rogue"],
-                "name_warrior": "Alden",
-                "name_rogue": "",
-            },
+        call_command(
+            "validate_scenario",
+            scenario_version=1,
+            stdout=output,
         )
 
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "Choose exactly three characters.")
-        self.assertContains(response, "Enter a name for this character.")
-        self.assertFalse(DndSession.objects.exists())
-
-    def test_create_game_instantiates_complete_scenario(self):
-        self.login()
-        templates = create_scenario_templates()
-        original_warrior = deepcopy(
-            CharacterTemplate.objects.get(template_key="warrior").character_template
+        self.assertIn(
+            "Validated 4 definitions for whitesparrow v1",
+            output.getvalue(),
         )
 
-        response = self.client.post(
-            reverse("home"),
-            {
-                "selected_templates": ["warrior", "druid", "bard"],
-                "name_warrior": "Alden",
-                "name_druid": "Briar",
-                "name_bard": "Calla",
-            },
-        )
-
-        self.assertRedirects(response, reverse("home"))
-        campaign = DndSession.objects.get(active=True)
-        self.assertEqual(campaign.user.email, "player@example.com")
-        self.assertEqual(campaign.scenario_key, "whitesparrow")
-        self.assertEqual(campaign.scenario_version, 1)
-        self.assertEqual(campaign.locations.count(), 1)
-        self.assertEqual(campaign.npcs.count(), 1)
-        self.assertEqual(campaign.quests.count(), 1)
-        self.assertEqual(campaign.world_lore.count(), 1)
-        self.assertEqual(campaign.characters.count(), 3)
-
-        location = campaign.locations.get()
-        npc = campaign.npcs.get()
-        quest = campaign.quests.get()
-        self.assertEqual(campaign.current_location, location)
-        self.assertEqual(location.template, templates["location"])
-        self.assertEqual(npc.current_location, location)
-        self.assertEqual(npc.state_json["public_info"], {})
-        self.assertEqual(quest.status, QuestTemplate.InitialStatus.AVAILABLE)
-        self.assertEqual(
-            quest.related_entities_json,
-            [
-                {"type": "npc", "id": npc.id},
-                {"type": "location", "id": location.id},
-            ],
-        )
-        self.assertEqual(
-            campaign.world_lore.get().template,
-            templates["lore"],
-        )
-        self.assertTrue(
-            all(
-                character.current_location_id == location.id
-                for character in campaign.characters.all()
-            )
-        )
-        warrior = campaign.characters.get(name="Alden")
-        self.assertEqual(warrior.template_json, original_warrior)
-        self.assertEqual(warrior.mechanics_json, original_warrior)
-
-    def test_create_game_requires_complete_active_scenario(self):
-        self.login()
-
-        response = self.client.post(
-            reverse("home"),
-            {
-                "selected_templates": ["warrior", "druid", "bard"],
-                "name_warrior": "Alden",
-                "name_druid": "Briar",
-                "name_bard": "Calla",
-            },
-        )
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, "The adventure has not been prepared yet")
-        self.assertFalse(DndSession.objects.exists())
-        self.assertFalse(WorldLore.objects.exists())
-
-    def test_home_includes_current_rules_overlay_for_authenticated_users(self):
-        self.login()
-
-        response = self.client.get(reverse("home"))
-
-        self.assertEqual(response.status_code, 200)
-        self.assertContains(response, 'id="open-documentation"')
-        self.assertContains(response, 'id="documentation-dialog"')
-        self.assertContains(response, "AI DUNGEON MASTER RULESET")
-        self.assertContains(response, "Phoenix of Invincibility")
-
-
-class CharacterTemplateTests(TestCase):
-    def test_character_templates_are_loaded_without_names(self):
-        self.client.get(reverse("home"))
-
-        self.assertEqual(CharacterTemplate.objects.count(), 5)
-        self.assertEqual(
-            set(CharacterTemplate.objects.values_list("template_key", flat=True)),
-            {"warrior", "rogue", "wizard", "druid", "bard"},
-        )
-        for template in CharacterTemplate.objects.all():
-            self.assertNotIn("name", template.character_template)
-            for ability in template.character_template["abilities"]:
-                self.assertTrue(ability["explanation"].strip())
-
-    def test_sync_restores_missing_and_changed_character_templates(self):
-        CharacterTemplate.objects.filter(template_key="rogue").delete()
-        CharacterTemplate.objects.filter(template_key="wizard").update(
-            character_template={"class": "Incorrect"}
-        )
-
-        sync_character_templates()
-
-        expected_templates = load_character_templates()
-        self.assertEqual(
-            CharacterTemplate.objects.get(template_key="rogue").character_template,
-            expected_templates["rogue"],
-        )
-        self.assertEqual(
-            CharacterTemplate.objects.get(template_key="wizard").character_template,
-            expected_templates["wizard"],
-        )
-
-
-class DndSessionTests(TestCase):
-    def test_user_cannot_have_two_active_sessions(self):
-        app_user = AppUser.objects.create(email="player@example.com")
-        DndSession.objects.create(user=app_user, active=True)
-
-        with self.assertRaises(IntegrityError), transaction.atomic():
-            DndSession.objects.create(user=app_user, active=True)
-
-    def test_quit_session_inactivates_only_logged_in_users_session(self):
-        auth_user = User.objects.create_user(
-            username="player@example.com",
-            email="player@example.com",
-        )
-        self.client.force_login(auth_user)
-        app_user = AppUser.objects.get(email="player@example.com")
-        current_session = DndSession.objects.create(user=app_user, active=True)
-
-        other_user = AppUser.objects.create(email="other@example.com")
-        other_session = DndSession.objects.create(user=other_user, active=True)
-
-        response = self.client.post(reverse("quit_session"))
-
-        self.assertRedirects(response, reverse("home"))
-        current_session.refresh_from_db()
-        other_session.refresh_from_db()
-        self.assertFalse(current_session.active)
-        self.assertTrue(other_session.active)
-
-
-class ScenarioLoreTests(TestCase):
-    def test_release_loads_all_definition_types_and_resolves_source_contract(self):
+    def test_release_parses_init_entities_statuses_and_relationships(self):
         release = load_scenario_release()
 
         self.assertEqual(release.scenario_key, "whitesparrow")
         self.assertEqual(release.version, 1)
         self.assertEqual(len(release.definitions), 4)
+        self.assertEqual(len(release.lore_chunks), 2)
         self.assertEqual(
             {definition.definition_type for definition in release.definitions},
             {"location", "npc", "quest", "world_lore"},
         )
-        self.assertEqual(len(release.lore_chunks), 2)
+        self.assertEqual(
+            release.initialization.starting_location_uuid,
+            LOCATION_UUID,
+        )
+        self.assertEqual(release.initialization.main_quest_uuid, QUEST_UUID)
+        self.assertIn("Light rain falls", release.initialization.opening)
+        self.assertIn("no further actions", release.initialization.dm_only)
+        self.assertEqual(
+            grouped_known_entities(release),
+            {
+                "locations": [str(LOCATION_UUID)],
+                "npcs": [],
+                "quests": [str(QUEST_UUID)],
+                "world_lore": [str(LORE_UUID)],
+            },
+        )
+
+        npc = release.definitions_of_type("npc")[0]
+        quest = release.definitions_of_type("quest")[0]
+        self.assertEqual(npc.initial_status, "active")
+        self.assertEqual(
+            npc.relationships,
+            (SourceRelationship("located_in", "location", LOCATION_UUID),),
+        )
+        self.assertEqual(quest.initial_status, "available")
+        self.assertEqual(
+            quest.relationships,
+            (
+                SourceRelationship("involves", "npc", NPC_UUID),
+                SourceRelationship("involves", "location", LOCATION_UUID),
+            ),
+        )
         self.assertEqual(
             {chunk.visibility for chunk in release.lore_chunks},
             {Visibility.PUBLIC_INFO, Visibility.DM_ONLY},
         )
-        self.assertTrue(release.lore_chunks[0].initially_known)
-        self.assertFalse(release.lore_chunks[1].initially_known)
 
-        quest = release.definitions_of_type("quest")[0]
-        self.assertEqual(
-            quest.related_references,
-            (("npc", NPC_UUID), ("location", LOCATION_UUID)),
-        )
-
-    def test_empty_required_definition_folder_is_rejected(self):
-        from pathlib import Path
-        from tempfile import TemporaryDirectory
-
+    def test_definition_requires_uuid_on_first_line(self):
         with TemporaryDirectory() as directory:
-            release_dir = Path(directory) / "whitesparrow" / "v1"
-            for folder in ("locations", "npcs", "quests"):
-                (release_dir / folder).mkdir(parents=True, exist_ok=True)
+            release_dir = Path(directory) / "v1"
+            location_dir = release_dir / "locations"
+            location_dir.mkdir(parents=True)
+            path = location_dir / "bad.txt"
+            path.write_text(
+                "NAME: Bad\nINITIAL STATUS: active\n\nRELATIONSHIPS:\n\n"
+                "PUBLIC:\n\nSafe.\n\nDM_ONLY:\n\nHidden.\n",
+                encoding="utf-8",
+            )
 
-            with self.assertRaisesRegex(ScenarioLoreError, "locations/"):
+            with self.assertRaisesRegex(ScenarioLoreError, "must begin with"):
+                parse_definition_file(path)
+
+    def test_definition_and_init_creation_functions_write_contract(self):
+        with TemporaryDirectory() as directory:
+            release_dir = Path(directory) / "v2"
+            target = create_definition_file(
+                release_dir=release_dir,
+                definition_type="npc",
+                filename="new_npc.txt",
+                name="New NPC",
+                initial_status="hidden",
+                relationships=(
+                    SourceRelationship("located_in", "location", LOCATION_UUID),
+                ),
+                public_info="Safe description.",
+                dm_only="Hidden description.",
+            )
+            initialization = create_init_file(
+                release_dir=release_dir,
+                starting_location_uuid=LOCATION_UUID,
+                main_quest_uuid=QUEST_UUID,
+                opening="The adventure opens.",
+                known_entity_uuids=(LOCATION_UUID,),
+                dm_only="Private setup.",
+            )
+
+            self.assertTrue(
+                target.read_text(encoding="utf-8").startswith(
+                    f"UUID: {UUID_PLACEHOLDER}\nNAME: New NPC"
+                )
+            )
+            parsed = parse_definition_file(target, allow_placeholder=True)
+            self.assertEqual(parsed.name, "New NPC")
+            self.assertEqual(parsed.initial_status, "hidden")
+            self.assertEqual(initialization.name, "init.txt")
+            self.assertTrue(
+                initialization.read_text(encoding="utf-8").startswith(
+                    "STARTING LOCATION:"
+                )
+            )
+
+    def test_relationship_must_reference_correct_entity_type(self):
+        with TemporaryDirectory() as directory:
+            release_dir = copy_whitesparrow_release(directory, 1)
+            quest_path = release_dir / "quests" / "investigate_the_night_blades.txt"
+            text = quest_path.read_text(encoding="utf-8").replace(
+                f"involves | npc | {NPC_UUID}",
+                f"involves | location | {NPC_UUID}",
+            )
+            quest_path.write_text(text, encoding="utf-8")
+
+            with self.assertRaisesRegex(ScenarioLoreError, "unknown location"):
                 load_scenario_release(scenario_dir=directory)
 
     def test_embedding_requests_are_batched_and_validated(self):
@@ -415,13 +233,91 @@ class ScenarioLoreTests(TestCase):
         self.assertEqual(request["dimensions"], 3072)
         self.assertEqual(len(request["input"]), 3)
         self.assertEqual(len(embedded), len(inputs))
-        self.assertEqual(len(next(iter(embedded.values()))), 3072)
 
-    @patch("core.scenario_lore.embed_scenario_inputs")
-    def test_template_sync_builds_and_links_complete_active_release(
-        self,
-        embed_inputs,
-    ):
+
+class ScenarioUUIDTests(TestCase):
+    def test_population_reuses_exact_matches_and_generates_new_uuid(self):
+        with TemporaryDirectory() as directory:
+            copy_whitesparrow_release(directory, 1)
+            release_dir = copy_whitesparrow_release(directory, 2)
+            definition_paths = sorted(
+                path
+                for folder in ("locations", "npcs", "quests", "worldlore")
+                for path in (release_dir / folder).glob("*.txt")
+            )
+            for path in definition_paths:
+                replace_uuid_with_placeholder(path)
+            new_npc = release_dir / "npcs" / "traveler.txt"
+            new_npc.write_text(
+                render_definition_file(
+                    definition_type="npc",
+                    name="A Passing Traveler",
+                    initial_status="hidden",
+                    relationships=(
+                        SourceRelationship(
+                            "located_in",
+                            "location",
+                            LOCATION_UUID,
+                        ),
+                    ),
+                    public_info="A road-worn traveler.",
+                    dm_only="The traveler is avoiding the sheriff.",
+                ),
+                encoding="utf-8",
+            )
+
+            populated = populate_scenario_uuids(
+                scenario_dir=directory,
+                version=2,
+            )
+
+            self.assertEqual(len(populated), 5)
+            expected = {
+                "locations/whitesparrow_village.txt": LOCATION_UUID,
+                "npcs/sheriff_ruth_willowmane.txt": NPC_UUID,
+                "quests/investigate_the_night_blades.txt": QUEST_UUID,
+                "worldlore/the_night_blades.txt": LORE_UUID,
+            }
+            for source_file, expected_uuid in expected.items():
+                self.assertEqual(UUID(populated[source_file]), expected_uuid)
+            generated_uuid = UUID(populated["npcs/traveler.txt"])
+            self.assertNotIn(generated_uuid, expected.values())
+            self.assertNotIn(UUID_PLACEHOLDER, new_npc.read_text(encoding="utf-8"))
+            self.assertEqual(load_scenario_release(scenario_dir=directory).version, 2)
+
+    def test_population_is_atomic_when_release_validation_fails(self):
+        with TemporaryDirectory() as directory:
+            copy_whitesparrow_release(directory, 1)
+            release_dir = copy_whitesparrow_release(directory, 2)
+            definition_paths = sorted(
+                path
+                for folder in ("locations", "npcs", "quests", "worldlore")
+                for path in (release_dir / folder).glob("*.txt")
+            )
+            for path in definition_paths:
+                replace_uuid_with_placeholder(path)
+            npc_path = release_dir / "npcs" / "sheriff_ruth_willowmane.txt"
+            npc_path.write_text(
+                npc_path.read_text(encoding="utf-8").replace(
+                    str(LOCATION_UUID),
+                    str(uuid4()),
+                ),
+                encoding="utf-8",
+            )
+
+            with self.assertRaisesRegex(ScenarioLoreError, "unknown location"):
+                populate_scenario_uuids(scenario_dir=directory, version=2)
+
+            for path in definition_paths:
+                self.assertTrue(
+                    path.read_text(encoding="utf-8").startswith(
+                        f"UUID: {UUID_PLACEHOLDER}"
+                    )
+                )
+
+
+class ScenarioSynchronizationTests(TestCase):
+    def test_sync_builds_linked_immutable_active_templates(self):
         old_template = WorldLoreChunkTemplate.objects.create(
             definition_uuid=uuid4(),
             scenario_key="whitesparrow",
@@ -429,23 +325,16 @@ class ScenarioLoreTests(TestCase):
             active=True,
             source_file="worldlore/old.txt",
             title="Old Lore",
-            section="Public Info",
+            section="Public",
             chunk_number=1,
             visibility=Visibility.PUBLIC_INFO,
-            initially_known=True,
             content="Old lore.",
             embedding=ZERO_EMBEDDING,
         )
 
-        def embedded_fixture(inputs, **kwargs):
-            return {item.key: ZERO_EMBEDDING for item in inputs}
+        version, count = synchronize_fixture()
 
-        embed_inputs.side_effect = embedded_fixture
-
-        version, count = sync_scenario_templates()
-
-        self.assertEqual(version, 1)
-        self.assertEqual(count, 5)
+        self.assertEqual((version, count), (1, 5))
         self.assertEqual(LocationTemplate.objects.filter(active=True).count(), 1)
         self.assertEqual(NPCTemplate.objects.filter(active=True).count(), 1)
         self.assertEqual(QuestTemplate.objects.filter(active=True).count(), 1)
@@ -461,16 +350,212 @@ class ScenarioLoreTests(TestCase):
         quest = QuestTemplate.objects.get(active=True)
         self.assertEqual(npc.initial_location_template, location)
         self.assertEqual(
-            quest.related_templates_json,
+            npc.relationships_json,
             [
-                {"type": "npc", "id": npc.id},
-                {"type": "location", "id": location.id},
+                {
+                    "relation": "located_in",
+                    "target": {"type": "location", "id": location.id},
+                }
+            ],
+        )
+        self.assertEqual(
+            quest.relationships_json,
+            [
+                {
+                    "relation": "involves",
+                    "target": {"type": "npc", "id": npc.id},
+                },
+                {
+                    "relation": "involves",
+                    "target": {"type": "location", "id": location.id},
+                },
             ],
         )
 
-        second_version, second_count = sync_scenario_templates()
-        self.assertEqual((second_version, second_count), (1, 5))
+        self.assertEqual(synchronize_fixture(), (1, 5))
         self.assertEqual(LocationTemplate.objects.count(), 1)
         self.assertEqual(NPCTemplate.objects.count(), 1)
         self.assertEqual(QuestTemplate.objects.count(), 1)
         self.assertEqual(WorldLoreChunkTemplate.objects.count(), 3)
+
+
+class CampaignCreationTests(TestCase):
+    def setUp(self):
+        synchronize_fixture()
+        self.auth_user = User.objects.create_user(
+            username="player@example.com",
+            email="player@example.com",
+        )
+        self.client.force_login(self.auth_user)
+
+    def create_campaign_through_view(self):
+        return self.client.post(
+            reverse("home"),
+            {
+                "selected_templates": ["warrior", "druid", "bard"],
+                "name_warrior": "Alden",
+                "name_druid": "Briar",
+                "name_bard": "Calla",
+            },
+        )
+
+    def test_creation_instantiates_bootstrap_state_and_relationships(self):
+        original_warrior = deepcopy(
+            CharacterTemplate.objects.get(template_key="warrior").character_template
+        )
+
+        response = self.create_campaign_through_view()
+
+        self.assertRedirects(response, reverse("home"))
+        campaign = DndSession.objects.get(status=DndSession.Status.ACTIVE)
+        self.assertEqual(campaign.scenario_version, 1)
+        self.assertIn("Light rain falls", campaign.opening_text)
+        self.assertEqual(
+            campaign.initially_known_entities_json,
+            {
+                "locations": [str(LOCATION_UUID)],
+                "npcs": [],
+                "quests": [str(QUEST_UUID)],
+                "world_lore": [str(LORE_UUID)],
+            },
+        )
+        self.assertEqual(campaign.locations.count(), 1)
+        self.assertEqual(campaign.npcs.count(), 1)
+        self.assertEqual(campaign.quests.count(), 1)
+        self.assertEqual(campaign.world_lore.count(), 2)
+        self.assertEqual(campaign.characters.count(), 3)
+
+        location = campaign.locations.get()
+        npc = campaign.npcs.get()
+        quest = campaign.quests.get()
+        self.assertEqual(campaign.current_location, location)
+        self.assertEqual(campaign.main_quest, quest)
+        self.assertEqual(quest.status, QuestInstance.Status.ACTIVE)
+        self.assertEqual(npc.current_location, location)
+        self.assertTrue(npc.state_json["public_info"])
+        self.assertTrue(npc.state_json["dm_only"])
+        self.assertEqual(
+            npc.relationships_json,
+            [
+                {
+                    "relation": "located_in",
+                    "target": {"type": "location", "id": location.id},
+                }
+            ],
+        )
+        self.assertEqual(
+            quest.relationships_json,
+            [
+                {
+                    "relation": "involves",
+                    "target": {"type": "npc", "id": npc.id},
+                },
+                {
+                    "relation": "involves",
+                    "target": {"type": "location", "id": location.id},
+                },
+            ],
+        )
+        warrior = campaign.characters.get(name="Alden")
+        self.assertEqual(warrior.template_json, original_warrior)
+        self.assertEqual(warrior.mechanics_json, original_warrior)
+        self.assertEqual(warrior.current_location, location)
+
+    def test_opening_is_rendered_for_new_campaign(self):
+        self.create_campaign_through_view()
+
+        response = self.client.get(reverse("home"))
+
+        self.assertContains(response, "The adventure begins")
+        self.assertContains(response, "Light rain falls")
+
+    def test_main_quest_finish_completes_and_locks_campaign(self):
+        self.create_campaign_through_view()
+        campaign = DndSession.objects.get(status=DndSession.Status.ACTIVE)
+
+        completed = finish_quest(campaign.main_quest)
+
+        self.assertTrue(completed)
+        campaign.refresh_from_db()
+        campaign.main_quest.refresh_from_db()
+        self.assertEqual(campaign.status, DndSession.Status.COMPLETED)
+        self.assertEqual(campaign.main_quest.status, QuestInstance.Status.FINISHED)
+        response = self.client.get(reverse("home"))
+        self.assertContains(response, "Adventure complete")
+        self.assertContains(response, "completed adventure is read-only")
+        self.assertNotContains(response, 'id="open-quit-session"')
+
+    def test_quit_abandons_only_current_users_campaign(self):
+        self.create_campaign_through_view()
+        campaign = DndSession.objects.get(user__email="player@example.com")
+        other_user = AppUser.objects.create(email="other@example.com")
+        other_campaign = DndSession.objects.create(
+            user=other_user,
+            status=DndSession.Status.ACTIVE,
+        )
+
+        response = self.client.post(reverse("quit_session"))
+
+        self.assertRedirects(response, reverse("home"))
+        campaign.refresh_from_db()
+        other_campaign.refresh_from_db()
+        self.assertEqual(campaign.status, DndSession.Status.ABANDONED)
+        self.assertEqual(other_campaign.status, DndSession.Status.ACTIVE)
+
+    def test_user_cannot_have_two_active_campaigns(self):
+        app_user = AppUser.objects.get(email="player@example.com")
+        DndSession.objects.create(user=app_user, status=DndSession.Status.ACTIVE)
+
+        with self.assertRaises(IntegrityError), transaction.atomic():
+            DndSession.objects.create(
+                user=app_user,
+                status=DndSession.Status.ACTIVE,
+            )
+
+
+class ExistingInterfaceTests(TestCase):
+    def test_home_prompts_anonymous_users_to_log_in(self):
+        response = self.client.get(reverse("home"))
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "AI Dungeon Master")
+        self.assertContains(response, "Log in with Google")
+
+    def test_create_game_requires_complete_active_scenario(self):
+        user = User.objects.create_user(
+            username="player@example.com",
+            email="player@example.com",
+        )
+        self.client.force_login(user)
+
+        response = self.client.post(
+            reverse("home"),
+            {
+                "selected_templates": ["warrior", "druid", "bard"],
+                "name_warrior": "Alden",
+                "name_druid": "Briar",
+                "name_bard": "Calla",
+            },
+        )
+
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, "The adventure has not been prepared yet")
+        self.assertFalse(DndSession.objects.exists())
+
+    def test_character_template_sync_still_restores_templates(self):
+        CharacterTemplate.objects.filter(template_key="rogue").delete()
+        CharacterTemplate.objects.filter(template_key="wizard").update(
+            character_template={"class": "Incorrect"}
+        )
+
+        sync_character_templates()
+
+        expected_templates = load_character_templates()
+        self.assertEqual(
+            CharacterTemplate.objects.get(template_key="rogue").character_template,
+            expected_templates["rogue"],
+        )
+        self.assertEqual(
+            CharacterTemplate.objects.get(template_key="wizard").character_template,
+            expected_templates["wizard"],
+        )

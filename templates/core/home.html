@@ -602,7 +602,9 @@
               <div class="header-actions">
                 <button class="button secondary" id="open-characters" type="button">Characters</button>
                 <button class="button secondary" id="open-documentation" type="button">Rules</button>
-                <button class="button danger" id="open-quit-session" type="button">Quit session</button>
+                {% if active_session.status == "active" %}
+                  <button class="button danger" id="open-quit-session" type="button">Quit session</button>
+                {% endif %}
                 <form method="post" action="{% url 'account_logout' %}">
                   {% csrf_token %}
                   <button class="button secondary" type="submit">Log out</button>
@@ -611,12 +613,16 @@
             </div>
             <div class="chat-log">
               <div class="empty-state">
-                <h2>The road waits.</h2>
-                <p>The chat interface is ready. The dungeon master will begin speaking here once the game loop is connected.</p>
+                {% if active_session.status == "completed" %}
+                  <h2>Adventure complete</h2>
+                {% else %}
+                  <h2>The adventure begins</h2>
+                {% endif %}
+                <p>{{ active_session.opening_text|linebreaksbr }}</p>
               </div>
             </div>
             <form class="composer">
-              <textarea disabled placeholder="Type your action..."></textarea>
+              <textarea disabled placeholder="{% if active_session.status == 'completed' %}This completed adventure is read-only.{% else %}Type your action...{% endif %}"></textarea>
               <button class="button" type="submit" disabled>Send</button>
             </form>
           </section>
@@ -770,19 +776,21 @@
           {% endfor %}
         </div>
       </dialog>
-      <dialog class="confirmation-dialog" id="quit-session-dialog" aria-labelledby="quit-session-title">
-        <div class="confirmation-body">
-          <h2 id="quit-session-title">Quit this session?</h2>
-          <p>Your current adventure will become inactive. Your character records will remain stored.</p>
-          <div class="confirmation-actions">
-            <button class="button secondary" id="cancel-quit-session" type="button">Cancel</button>
-            <form method="post" action="{% url 'quit_session' %}">
-              {% csrf_token %}
-              <button class="button danger" type="submit">Confirm quit</button>
-            </form>
+      {% if active_session.status == "active" %}
+        <dialog class="confirmation-dialog" id="quit-session-dialog" aria-labelledby="quit-session-title">
+          <div class="confirmation-body">
+            <h2 id="quit-session-title">Quit this session?</h2>
+            <p>Your current adventure will be abandoned. Your character records will remain stored.</p>
+            <div class="confirmation-actions">
+              <button class="button secondary" id="cancel-quit-session" type="button">Cancel</button>
+              <form method="post" action="{% url 'quit_session' %}">
+                {% csrf_token %}
+                <button class="button danger" type="submit">Confirm quit</button>
+              </form>
+            </div>
           </div>
-        </div>
-      </dialog>
+        </dialog>
+      {% endif %}
     {% endif %}
     <script>
       const documentationDialog = document.getElementById("documentation-dialog");

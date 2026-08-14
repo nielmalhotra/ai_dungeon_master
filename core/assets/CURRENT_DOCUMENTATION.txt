@@ -216,6 +216,10 @@ can be completed within the character's movement allowance.
 
 GAME LOOP
 
+The campaign begins with the authored opening and all characters at the authored
+starting location. The configured main quest is always active. Finishing the main
+quest completes the campaign; no further player actions or state changes occur.
+
 1. The DM describes the current scenes and perceptible facts.
 2. The player submits the party command.
 3. The AI identifies each character's intention, dependencies, targets, and
@@ -230,6 +234,10 @@ Authoritative state includes HP, conditions, inventory, locations,
 relationships, NPC knowledge, discovered clues, world objects, and pending
 clarifications. [[future-combat]]Combat adds authoritative combat state.
 [[/future-combat]]
+
+Public entity information is current truth safe to reveal when appropriate.
+DM-only information remains hidden. The rules do not separately track whether a
+safe fact has already been narrated or whether a player remembers it.
 
 [[future-combat]]Combat ends when one side dies, flees, surrenders, or completes
 its objective.[[/future-combat]]
