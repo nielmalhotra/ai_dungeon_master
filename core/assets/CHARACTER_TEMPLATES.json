@@ -83,7 +83,6 @@
       {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
       {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
-    "conditions": [],
     "location": null
   },
   "rogue": {
@@ -170,7 +169,6 @@
       {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
       {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
-    "conditions": [],
     "location": null
   },
   "wizard": {
@@ -255,7 +253,6 @@
       {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
       {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
-    "conditions": [],
     "location": null
   },
   "druid": {
@@ -334,7 +331,6 @@
       {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
       {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
-    "conditions": [],
     "location": null
   },
   "bard": {
@@ -414,7 +410,6 @@
       {"key": "war_hating_gods_bow", "name": "War-Hating God's Bow", "quantity": 1},
       {"key": "fairy_of_knowledge", "name": "Fairy of Knowledge", "quantity": 1}
     ],
-    "conditions": [],
     "location": null
   }
 }

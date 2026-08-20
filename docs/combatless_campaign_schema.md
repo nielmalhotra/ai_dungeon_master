@@ -18,6 +18,9 @@ initialization contract for the combatless AI Dungeon Master.
   projections of relationship data, not a replacement for relationships.
 - `state_json` describes what an entity is like now. Historical changes belong
   in `WorldEvent` records.
+- Rules tools own authoritative state transitions. The AI decides intent and
+  fictional applicability, while tools validate campaign ownership, input shape,
+  state invariants, and audit records.
 - Combat remains outside the current scope.
 - Player characters share player-safe knowledge through the Fairy of Knowledge,
   so the system does not maintain independent player-character knowledge state.
@@ -253,10 +256,50 @@ Statuses are deliberately small:
 | Location | `hidden`, `active`, `destroyed` |
 | NPC | `hidden`, `active`, `dead` |
 | Quest | `hidden`, `available`, `active`, `finished` |
+| Item | `active`, `consumed`, `destroyed` |
 
 World lore is synchronized as public and DM-only chunks. `WorldLore` associates
 those immutable chunks with a campaign and stores resolved runtime
 relationships.
+
+### Abilities
+
+`AbilityTemplate` normalizes the name, embedded description, combat category,
+resolution, deterministic effect, maximum uses, and recharge rule authored in a
+character template. `AbilityInstance` belongs to one character and stores its
+remaining uses and mutable visibility state. Combat abilities remain stored but
+cannot be invoked by the combatless ability tool.
+
+Every active ability owned by a player character is supplied directly to the DM
+context. Its embedding supports semantic lookup but never determines whether the
+DM remembers an owned ability.
+
+### Items
+
+`ItemTemplate` contains a stable key, public and DM-only definition data,
+deterministic mechanics, and separate public and DM-only embeddings. Every unit
+of an item is one `ItemInstance`; displayed quantity is the count of matching
+active instances.
+
+An active item has either a typed generic owner (`character` or `npc`) or a
+current location. Mutable `state_json` uses the standard visibility envelope, so
+facts such as a torch becoming wet can change without modifying the template.
+Consumed and destroyed instances are retained for audit history.
+
+### Roll Mechanics
+
+Characters and NPCs store attributes, trained skills, strong saves, and active
+`modifiers_json`. Ability checks add the chosen attribute and a `+2` trained-skill
+bonus when applicable. Saving throws add the attribute and `+2` when it is a
+strong save. The rules engine calculates these values; the AI never supplies a
+final modifier.
+
+Distinct advantage and disadvantage sources stack. Duplicate sources do not.
+The AI may add validated situational advantage or disadvantage, but flat bonuses
+and penalties may only originate in an ability, item, or system definition.
+Temporary modifiers declare their roll scope and duration and are consumed or
+expired by the rules engine. Rest restores maximum HP and all limited-use
+abilities and removes every non-permanent modifier.
 
 ## Campaign Creation
 
@@ -273,7 +316,9 @@ Campaign creation is transactional and performs no embedding request:
    relationships.
 8. Force the configured main quest to `active`.
 9. Place all selected characters at the configured starting location.
-10. Set the session's current location and main quest.
+10. Instantiate their normalized abilities and one item row per unit of starting
+    gear.
+11. Set the session's current location and main quest.
 
 Finishing any quest sets it to `finished`. Finishing the session's main quest
 also sets the campaign to `completed`. Completed and abandoned campaigns reject
@@ -291,3 +336,13 @@ The existing combatless turn architecture remains unchanged:
 
 Only validated application tools may mutate authoritative state or emit world
 events.
+
+Implemented deterministic tools cover raw dice, checks, saves, contests,
+temporary roll modifiers, character and NPC movement, non-combat ability use,
+rest, item transfer/placement/consumption/state, visibility-state patches, and
+quest completion. Movement feasibility outside exact-location interaction is
+adjudicated by the AI; movement tools enforce identity, campaign ownership, and
+the resulting authoritative state change.
+
+Relationship mutation and quest advancement are intentionally not part of this
+tool contract yet and require separate design.

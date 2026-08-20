@@ -13,8 +13,10 @@ from accounts.models import User as AppUser
 from .campaigns import ScenarioNotReadyError, abandon_campaign, create_campaign
 from .forms import CreateGameForm
 from .models import (
+    AbilityTemplate,
     CharacterTemplate,
     DndSession,
+    ItemInstance,
 )
 
 CURRENT_DOCUMENTATION_PATH = (
@@ -70,7 +72,7 @@ def _current_session_for(request):
             DndSession.Status.ACTIVE,
             DndSession.Status.COMPLETED,
         ),
-    ).prefetch_related("characters")
+    ).prefetch_related("characters__abilities__template")
     return sessions.order_by(
         models.Case(
             models.When(status=DndSession.Status.ACTIVE, then=0),
@@ -86,7 +88,30 @@ def _character_sheets(active_session):
 
     sheets = []
     for instance in active_session.characters.all():
-        attributes = instance.template_json["attributes"]
+        attributes = instance.mechanics_json["attributes"]
+        grouped_items = {}
+        for item in ItemInstance.objects.filter(
+            dnd_session=active_session,
+            owner_type=ItemInstance.OwnerType.CHARACTER,
+            owner_id=instance.id,
+            status=ItemInstance.Status.ACTIVE,
+        ).select_related("template"):
+            key = item.template_id or f"generated:{item.name}"
+            group = grouped_items.setdefault(
+                key,
+                {
+                    "name": item.name,
+                    "quantity": 0,
+                    "summary": (
+                        item.template.definition_json.get("public_info", {}).get(
+                            "summary", ""
+                        )
+                        if item.template
+                        else ""
+                    ),
+                },
+            )
+            group["quantity"] += 1
         sheets.append(
             {
                 "instance": instance,
@@ -97,6 +122,14 @@ def _character_sheets(active_session):
                     }
                     for attribute in ATTRIBUTE_ORDER
                 ],
+                "abilities": [
+                    ability
+                    for ability in instance.abilities.all()
+                    if ability.template.active
+                    and ability.template.category
+                    == AbilityTemplate.Category.NON_COMBAT
+                ],
+                "items": list(grouped_items.values()),
             }
         )
     return sheets

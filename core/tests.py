@@ -17,11 +17,24 @@ from django.urls import reverse
 from accounts.models import User as AppUser
 
 from .campaigns import finish_quest
-from .character_templates import load_character_templates, sync_character_templates
+from .character_templates import (
+    load_character_templates,
+    load_item_templates,
+    sync_character_templates,
+    sync_gameplay_template_embeddings,
+)
+from .game_tools import execute_game_tool
 from .models import (
+    AbilityInstance,
+    AbilityTemplate,
+    AgentRun,
+    CampaignTurn,
     CharacterInstance,
     CharacterTemplate,
     DndSession,
+    ItemInstance,
+    ItemTemplate,
+    LocationInstance,
     LocationTemplate,
     NPCTemplate,
     QuestInstance,
@@ -458,8 +471,30 @@ class CampaignCreationTests(TestCase):
         )
         warrior = campaign.characters.get(name="Alden")
         self.assertEqual(warrior.template_json, original_warrior)
-        self.assertEqual(warrior.mechanics_json, original_warrior)
+        for field in (
+            "hp",
+            "ac",
+            "initiative_modifier",
+            "attributes",
+            "trained_skills",
+            "strong_saves",
+        ):
+            self.assertEqual(warrior.mechanics_json[field], original_warrior[field])
         self.assertEqual(warrior.current_location, location)
+        self.assertEqual(
+            set(warrior.abilities.values_list("template__ability_key", flat=True)),
+            {ability["key"] for ability in original_warrior["abilities"]},
+        )
+        for item in original_warrior["gear"]:
+            self.assertEqual(
+                campaign.items.filter(
+                    owner_type=ItemInstance.OwnerType.CHARACTER,
+                    owner_id=warrior.id,
+                    template__template_key=item["key"],
+                    status=ItemInstance.Status.ACTIVE,
+                ).count(),
+                item["quantity"],
+            )
 
     def test_opening_is_rendered_for_new_campaign(self):
         self.create_campaign_through_view()
@@ -516,12 +551,14 @@ class CampaignCreationTests(TestCase):
 class CharacterTemplateContractTests(SimpleTestCase):
     def test_character_templates_include_shared_knowledge_and_non_combat_options(self):
         templates = load_character_templates()
+        item_templates = load_item_templates()
 
         self.assertEqual(len(templates), 5)
         for template_key, character in templates.items():
             with self.subTest(template=template_key):
                 gear_keys = {item["key"] for item in character["gear"]}
                 self.assertIn("fairy_of_knowledge", gear_keys)
+                self.assertTrue(gear_keys.issubset(item_templates))
                 self.assertTrue(
                     any(
                         ability.get("category") == "non_combat"
@@ -531,6 +568,284 @@ class CharacterTemplateContractTests(SimpleTestCase):
                 self.assertIn("hp", character)
                 self.assertIn("ac", character)
                 self.assertIn("initiative_modifier", character)
+        for item in item_templates.values():
+            self.assertTrue(item["public_info"]["summary"])
+            self.assertIn("consumable", item["mechanics"])
+            self.assertIn("transferable", item["mechanics"])
+
+
+class DeterministicGameToolTests(TestCase):
+    def setUp(self):
+        synchronize_fixture()
+        auth_user = User.objects.create_user(
+            username="tools@example.com",
+            email="tools@example.com",
+        )
+        self.client.force_login(auth_user)
+        self.client.post(
+            reverse("home"),
+            {
+                "selected_templates": ["warrior", "druid", "bard"],
+                "name_warrior": "Alden",
+                "name_druid": "Briar",
+                "name_bard": "Calla",
+            },
+        )
+        self.campaign = DndSession.objects.get(status=DndSession.Status.ACTIVE)
+        self.turn = CampaignTurn.objects.create(
+            dnd_session=self.campaign,
+            turn_number=1,
+            player_input="Resolve the party command.",
+            status=CampaignTurn.Status.RUNNING,
+        )
+        self.agent_run = AgentRun.objects.create(
+            campaign_turn=self.turn,
+            model="test-model",
+        )
+
+    def call_tool(self, call_id, tool_name, arguments):
+        return execute_game_tool(
+            agent_run=self.agent_run,
+            call_id=call_id,
+            tool_name=tool_name,
+            arguments=arguments,
+        )
+
+    def test_distinct_advantages_stack_and_rolls_are_idempotent(self):
+        warrior = self.campaign.characters.get(name="Alden")
+        applicability = {
+            "roll_types": ["ability_check"],
+            "attributes": ["strength"],
+            "skills": ["athletics"],
+        }
+        for number in (1, 2):
+            result = self.call_tool(
+                f"modifier-{number}",
+                "add_roll_modifier",
+                {
+                    "actor": {"type": "character", "id": warrior.id},
+                    "kind": "advantage",
+                    "source_key": f"situational.high_ground.{number}",
+                    "reason": f"Distinct favorable circumstance {number}",
+                    "applies_to": applicability,
+                    "duration": "next_applicable_roll",
+                },
+            )
+            self.assertTrue(result.success)
+            self.assertTrue(result.data["created"])
+
+        with patch("core.game_tools._roll_faces", return_value=[4, 18, 11]):
+            result = self.call_tool(
+                "strength-check",
+                "roll_check",
+                {
+                    "actor": {"type": "character", "id": warrior.id},
+                    "attribute": "strength",
+                    "skill": "athletics",
+                    "dc": 15,
+                    "reason": "Lift the fallen beam",
+                },
+            )
+
+        self.assertEqual(result.data["net_advantage"], 2)
+        self.assertEqual(result.data["faces"], [4, 18, 11])
+        self.assertEqual(result.data["attribute_modifier"], 3)
+        self.assertEqual(result.data["training_bonus"], 2)
+        self.assertEqual(result.data["total"], 23)
+        self.assertTrue(result.data["success"])
+        warrior.refresh_from_db()
+        self.assertEqual(warrior.modifiers_json, [])
+
+        repeated = self.call_tool(
+            "strength-check",
+            "roll_check",
+            {
+                "actor": {"type": "character", "id": warrior.id},
+                "attribute": "strength",
+                "skill": "athletics",
+                "dc": 15,
+                "reason": "Lift the fallen beam",
+            },
+        )
+        self.assertEqual(repeated.data, result.data)
+        self.assertEqual(self.agent_run.tool_calls.count(), 3)
+
+    def test_dice_saves_and_contests_use_authoritative_mechanics(self):
+        warrior = self.campaign.characters.get(name="Alden")
+        npc = self.campaign.npcs.get()
+        with patch("core.game_tools._roll_faces", return_value=[2, 3]):
+            dice = self.call_tool(
+                "raw-dice",
+                "roll_dice",
+                {"dice": "2d6+1", "reason": "A defined random effect"},
+            )
+        self.assertEqual(dice.data["total"], 6)
+
+        with patch("core.game_tools._roll_faces", return_value=[10]):
+            save = self.call_tool(
+                "strong-save",
+                "roll_save",
+                {
+                    "actor": {"type": "character", "id": warrior.id},
+                    "attribute": "strength",
+                    "dc": 12,
+                    "reason": "Hold the gate",
+                },
+            )
+        self.assertEqual(save.data["attribute_modifier"], 3)
+        self.assertEqual(save.data["strong_save_bonus"], 2)
+        self.assertEqual(save.data["total"], 15)
+
+        with patch("core.game_tools._roll_faces", side_effect=[[5], [2]]):
+            contest = self.call_tool(
+                "contest",
+                "roll_contest",
+                {
+                    "actor": {"type": "character", "id": warrior.id},
+                    "actor_attribute": "strength",
+                    "actor_skill": "athletics",
+                    "opponent": {"type": "npc", "id": npc.id},
+                    "opponent_attribute": "strength",
+                    "reason": "Force the stuck door from opposite sides",
+                },
+            )
+        self.assertEqual(
+            contest.data["winner"],
+            {"type": "character", "id": warrior.id},
+        )
+
+    def test_movement_ability_rest_and_inventory_mutate_audited_state(self):
+        warrior = self.campaign.characters.get(name="Alden")
+        npc = self.campaign.npcs.get()
+        destination = LocationInstance.objects.create(
+            dnd_session=self.campaign,
+            name="Old Farmhouse",
+            status=LocationInstance.Status.ACTIVE,
+        )
+        moved_character = self.call_tool(
+            "move-character",
+            "move_character",
+            {
+                "character_id": warrior.id,
+                "destination_location_id": destination.id,
+                "reason": "The route is possible in the established fiction.",
+            },
+        )
+        moved_npc = self.call_tool(
+            "move-npc",
+            "move_npc",
+            {
+                "npc_id": npc.id,
+                "destination_location_id": destination.id,
+                "reason": "The sheriff follows the party.",
+            },
+        )
+        self.assertTrue(moved_character.world_event_id)
+        self.assertTrue(moved_npc.world_event_id)
+        warrior.refresh_from_db()
+        npc.refresh_from_db()
+        self.assertEqual(warrior.current_location, destination)
+        self.assertEqual(npc.current_location, destination)
+
+        ability = AbilityInstance.objects.get(
+            character=warrior,
+            template__ability_key="heroic_effort",
+        )
+        used = self.call_tool(
+            "use-ability",
+            "use_ability",
+            {
+                "ability_instance_id": ability.id,
+                "reason": "Prepare to lift a heavy beam.",
+            },
+        )
+        self.assertEqual(used.data["remaining_uses"], 0)
+        warrior.refresh_from_db()
+        self.assertEqual(len(warrior.modifiers_json), 1)
+        warrior.mechanics_json["hp"]["current"] = 1
+        warrior.save(update_fields=["mechanics_json", "updated_at"])
+
+        rested = self.call_tool(
+            "rest",
+            "rest_character",
+            {"character_id": warrior.id, "reason": "A complete uninterrupted rest."},
+        )
+        ability.refresh_from_db()
+        warrior.refresh_from_db()
+        self.assertEqual(
+            warrior.mechanics_json["hp"]["current"],
+            warrior.mechanics_json["hp"]["maximum"],
+        )
+        self.assertEqual(ability.remaining_uses, ability.template.max_uses)
+        self.assertEqual(warrior.modifiers_json, [])
+        self.assertTrue(rested.world_event_id)
+
+        torch = self.campaign.items.get(
+            owner_type=ItemInstance.OwnerType.CHARACTER,
+            owner_id=warrior.id,
+            template__template_key="torch",
+        )
+        transferred = self.call_tool(
+            "transfer-torch",
+            "transfer_item",
+            {
+                "item_instance_id": torch.id,
+                "new_owner": {"type": "npc", "id": npc.id},
+                "reason": "Alden hands the torch to the sheriff.",
+            },
+        )
+        self.assertTrue(transferred.world_event_id)
+        updated = self.call_tool(
+            "wet-torch",
+            "update_item_state",
+            {
+                "item_instance_id": torch.id,
+                "state_patch": {
+                    "public_info": {"wet": True},
+                    "dm_only": {"will_light_after_drying": True},
+                },
+                "reason": "Rain soaked the torch.",
+            },
+        )
+        self.assertTrue(updated.data["state_json"]["public_info"]["wet"])
+        consumed = self.call_tool(
+            "consume-torch",
+            "consume_item",
+            {"item_instance_id": torch.id, "reason": "The torch burns away."},
+        )
+        torch.refresh_from_db()
+        self.assertTrue(consumed.world_event_id)
+        self.assertEqual(torch.status, ItemInstance.Status.CONSUMED)
+
+    def test_entity_state_and_quest_completion_use_validated_tools(self):
+        npc = self.campaign.npcs.get()
+        updated = self.call_tool(
+            "npc-state",
+            "update_entity_state",
+            {
+                "entity": {"type": "npc", "id": npc.id},
+                "state_patch": {
+                    "public_info": {"mood": "relieved"},
+                    "dm_only": {"remaining_doubt": "Ralavaz's motive"},
+                },
+                "reason": "The party produced convincing evidence.",
+            },
+        )
+        npc.refresh_from_db()
+        self.assertEqual(npc.state_json["public_info"]["mood"], "relieved")
+        self.assertTrue(updated.world_event_id)
+
+        finished = self.call_tool(
+            "finish-main-quest",
+            "finish_quest",
+            {
+                "quest_id": self.campaign.main_quest_id,
+                "reason": "The party discovered the leader and motive.",
+            },
+        )
+        self.campaign.refresh_from_db()
+        self.assertTrue(finished.data["campaign_completed"])
+        self.assertEqual(self.campaign.status, DndSession.Status.COMPLETED)
 
 
 class ExistingInterfaceTests(TestCase):
@@ -578,4 +893,23 @@ class ExistingInterfaceTests(TestCase):
         self.assertEqual(
             CharacterTemplate.objects.get(template_key="wizard").character_template,
             expected_templates["wizard"],
+        )
+
+    def test_gameplay_template_sync_embeds_abilities_and_items(self):
+        with patch(
+            "core.scenario_lore.embed_scenario_inputs",
+            side_effect=embedded_fixture,
+        ):
+            ability_count, item_count = sync_gameplay_template_embeddings()
+
+        self.assertEqual(
+            AbilityTemplate.objects.filter(active=True, embedding__isnull=False).count(),
+            ability_count,
+        )
+        self.assertEqual(
+            ItemTemplate.objects.filter(
+                active=True,
+                public_embedding__isnull=False,
+            ).count(),
+            item_count,
         )

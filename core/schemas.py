@@ -4,7 +4,7 @@ from enum import Enum
 from typing import Any, Dict, List, Optional
 from uuid import UUID
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 
 JsonObject = Dict[str, Any]
@@ -24,6 +24,19 @@ class VisibilityEnvelope(BaseModel):
 
     public_info: JsonObject = Field(default_factory=dict)
     dm_only: JsonObject = Field(default_factory=dict)
+
+
+class VisibilityPatch(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    public_info: Optional[JsonObject] = None
+    dm_only: Optional[JsonObject] = None
+
+    @model_validator(mode="after")
+    def require_change(self):
+        if not self.public_info and not self.dm_only:
+            raise ValueError("A visibility patch must contain a public or DM-only change.")
+        return self
 
 
 class CampaignState(VisibilityEnvelope):
@@ -60,6 +73,8 @@ class RuntimeEntityType(str, Enum):
     LOCATION = "location"
     QUEST = "quest"
     WORLD_LORE = "world_lore"
+    ABILITY = "ability"
+    ITEM = "item"
 
 
 class TemplateEntityType(str, Enum):
@@ -140,6 +155,7 @@ class CharacterInstanceRecord(OrmSchema):
     name: str
     template_json: JsonObject
     mechanics_json: JsonObject
+    modifiers_json: List[JsonObject] = Field(default_factory=list)
     current_location_id: Optional[int] = Field(default=None, gt=0)
     state_json: CharacterNarrativeState
     relationships_json: List[RuntimeRelationship] = Field(default_factory=list)
@@ -192,6 +208,7 @@ class NPCTemplateRecord(VersionedTemplateRecord):
     initial_location_template_id: Optional[int] = Field(default=None, gt=0)
     initial_status: "NPCStatus"
     definition_json: TemplateDefinition
+    mechanics_json: JsonObject
     relationships_json: List[TemplateRelationship] = Field(default_factory=list)
     metadata_json: JsonObject
     public_embedding: Optional[List[float]] = None
@@ -211,6 +228,8 @@ class NPCInstanceRecord(OrmSchema):
     name: str
     current_location_id: Optional[int] = Field(default=None, gt=0)
     status: NPCStatus
+    mechanics_json: JsonObject
+    modifiers_json: List[JsonObject] = Field(default_factory=list)
     state_json: NPCState
     relationships_json: List[RuntimeRelationship] = Field(default_factory=list)
     created_at: datetime
@@ -273,6 +292,76 @@ class WorldLoreRecord(OrmSchema):
     created_at: datetime
 
 
+class AbilityCategory(str, Enum):
+    NON_COMBAT = "non_combat"
+    COMBAT = "combat"
+
+
+class AbilityTemplateRecord(OrmSchema):
+    id: int = Field(gt=0)
+    character_template_id: int = Field(gt=0)
+    ability_key: str
+    name: str
+    active: bool
+    category: AbilityCategory
+    description: str
+    resolution_json: JsonObject
+    effect_json: JsonObject
+    max_uses: Optional[int] = Field(default=None, ge=1)
+    recharge: Optional[str] = None
+    embedding: Optional[List[float]] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class AbilityInstanceRecord(OrmSchema):
+    id: int = Field(gt=0)
+    character_id: int = Field(gt=0)
+    template_id: int = Field(gt=0)
+    remaining_uses: Optional[int] = Field(default=None, ge=0)
+    state_json: VisibilityEnvelope
+    created_at: datetime
+    updated_at: datetime
+
+
+class ItemStatus(str, Enum):
+    ACTIVE = "active"
+    CONSUMED = "consumed"
+    DESTROYED = "destroyed"
+
+
+class ItemOwnerType(str, Enum):
+    CHARACTER = "character"
+    NPC = "npc"
+
+
+class ItemTemplateRecord(OrmSchema):
+    id: int = Field(gt=0)
+    template_key: str
+    name: str
+    active: bool
+    definition_json: TemplateDefinition
+    mechanics_json: JsonObject
+    public_embedding: Optional[List[float]] = None
+    dm_embedding: Optional[List[float]] = None
+    created_at: datetime
+    updated_at: datetime
+
+
+class ItemInstanceRecord(OrmSchema):
+    id: int = Field(gt=0)
+    dnd_session_id: int = Field(gt=0)
+    template_id: Optional[int] = Field(default=None, gt=0)
+    name: str
+    owner_type: Optional[ItemOwnerType] = None
+    owner_id: Optional[int] = Field(default=None, gt=0)
+    current_location_id: Optional[int] = Field(default=None, gt=0)
+    status: ItemStatus
+    state_json: VisibilityEnvelope
+    created_at: datetime
+    updated_at: datetime
+
+
 class CampaignTurnStatus(str, Enum):
     PENDING = "pending"
     RUNNING = "running"
@@ -333,6 +422,8 @@ class RetrievedSourceType(str, Enum):
     LOCATION = "location"
     QUEST = "quest"
     WORLD_EVENT = "world_event"
+    ABILITY = "ability"
+    ITEM = "item"
 
 
 class RetrievedContextRecordSchema(OrmSchema):
@@ -396,11 +487,196 @@ class RollDiceInput(BaseModel):
     reason: str
 
 
+class AttributeName(str, Enum):
+    STRENGTH = "strength"
+    DEXTERITY = "dexterity"
+    CONSTITUTION = "constitution"
+    INTELLIGENCE = "intelligence"
+    WISDOM = "wisdom"
+    CHARISMA = "charisma"
+
+
+class SkillName(str, Enum):
+    ATHLETICS = "athletics"
+    STEALTH = "stealth"
+    SLEIGHT_OF_HAND = "sleight_of_hand"
+    KNOWLEDGE = "knowledge"
+    INVESTIGATION = "investigation"
+    PERCEPTION = "perception"
+    SURVIVAL = "survival"
+    INSIGHT = "insight"
+    PERSUASION = "persuasion"
+    DECEPTION = "deception"
+    INTIMIDATION = "intimidation"
+    PERFORMANCE = "performance"
+
+
+class RollType(str, Enum):
+    ABILITY_CHECK = "ability_check"
+    SAVING_THROW = "saving_throw"
+    CONTEST = "contest"
+
+
+class RollModifierKind(str, Enum):
+    ADVANTAGE = "advantage"
+    DISADVANTAGE = "disadvantage"
+    FLAT_BONUS = "flat_bonus"
+    FLAT_PENALTY = "flat_penalty"
+
+
+class RollModifierDuration(str, Enum):
+    CURRENT_ROLL = "current_roll"
+    NEXT_APPLICABLE_ROLL = "next_applicable_roll"
+    CURRENT_TURN = "current_turn"
+    UNTIL_REST = "until_rest"
+    PERMANENT = "permanent"
+
+
+class ModifierApplicability(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    roll_types: List[RollType] = Field(default_factory=list)
+    attributes: List[AttributeName] = Field(default_factory=list)
+    skills: List[SkillName] = Field(default_factory=list)
+
+
+class RollModifierEntry(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    id: UUID
+    kind: RollModifierKind
+    value: int = Field(default=1, ge=1, le=20)
+    source_key: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$")
+    reason: str
+    applies_to: ModifierApplicability
+    duration: RollModifierDuration
+    created_turn: int = Field(ge=0)
+
+
+class RollCheckInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor: RuntimeEntityReference
+    attribute: AttributeName
+    skill: Optional[SkillName] = None
+    dc: Optional[int] = Field(default=None, ge=0, le=100)
+    reason: str
+
+
+class RollSaveInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor: RuntimeEntityReference
+    attribute: AttributeName
+    dc: Optional[int] = Field(default=None, ge=0, le=100)
+    reason: str
+
+
+class RollContestInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor: RuntimeEntityReference
+    actor_attribute: AttributeName
+    actor_skill: Optional[SkillName] = None
+    opponent: RuntimeEntityReference
+    opponent_attribute: AttributeName
+    opponent_skill: Optional[SkillName] = None
+    reason: str
+
+
+class AddRollModifierInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor: RuntimeEntityReference
+    kind: RollModifierKind
+    source_key: str = Field(pattern=r"^[a-zA-Z0-9][a-zA-Z0-9_.:-]*$")
+    reason: str
+    applies_to: ModifierApplicability
+    duration: RollModifierDuration = RollModifierDuration.NEXT_APPLICABLE_ROLL
+
+
+class RemoveRollModifierInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    actor: RuntimeEntityReference
+    modifier_id: UUID
+
+
+class MoveCharacterInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    character_id: int = Field(gt=0)
+    destination_location_id: int = Field(gt=0)
+    reason: str
+
+
+class MoveNPCInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    npc_id: int = Field(gt=0)
+    destination_location_id: int = Field(gt=0)
+    reason: str
+
+
+class UseAbilityInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    ability_instance_id: int = Field(gt=0)
+    target: Optional[RuntimeEntityReference] = None
+    reason: str
+
+
+class RestCharacterInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    character_id: int = Field(gt=0)
+    reason: str
+
+
+class TransferItemInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_instance_id: int = Field(gt=0)
+    new_owner: RuntimeEntityReference
+    reason: str
+
+
+class MoveItemInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_instance_id: int = Field(gt=0)
+    destination_location_id: int = Field(gt=0)
+    reason: str
+
+
+class ConsumeItemInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_instance_id: int = Field(gt=0)
+    reason: str
+
+
+class UpdateItemStateInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    item_instance_id: int = Field(gt=0)
+    state_patch: VisibilityPatch
+    reason: str
+
+
 class EntityStateUpdate(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     entity: RuntimeEntityReference
-    state_json: VisibilityEnvelope
+    state_patch: VisibilityPatch
+    reason: str
+
+
+class FinishQuestInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    quest_id: int = Field(gt=0)
+    reason: str
 
 
 class CreateNPCInput(BaseModel):
@@ -437,3 +713,4 @@ class ToolResult(BaseModel):
     message: str
     affected_entities: List[RuntimeEntityReference] = Field(default_factory=list)
     world_event_id: Optional[int] = Field(default=None, gt=0)
+    data: JsonObject = Field(default_factory=dict)

@@ -66,13 +66,20 @@ Build or refresh the canonical scenario templates locally with:
 python3 manage.py sync_scenario_lore
 ```
 
-On the production server, run the same command through Docker:
+Synchronize and embed the normalized character abilities and item catalog with:
+
+```bash
+python3 manage.py sync_gameplay_templates
+```
+
+On the production server, run the corresponding commands through Docker:
 
 ```bash
 docker compose run --rm web python manage.py sync_scenario_lore
+docker compose run --rm web python manage.py sync_gameplay_templates
 ```
 
-The command embeds public and private source content in batches and atomically
+The scenario command embeds public and private source content in batches and atomically
 activates the location, NPC, quest, and world-lore templates for that release.
 Previous versions remain available but inactive. Creating a game performs no
 OpenAI request: it instantiates the active release, resolves runtime relationships,

@@ -1,0 +1,164 @@
+{
+  "animal_treats": {
+    "name": "Animal Treats",
+    "public_info": {"summary": "Small preserved treats useful for calming, rewarding, or befriending ordinary animals."},
+    "dm_only": {},
+    "mechanics": {"consumable": true, "transferable": true, "category": "non_combat"}
+  },
+  "bedroll": {
+    "name": "Bedroll",
+    "public_info": {"summary": "A portable sleeping roll that makes resting away from an inn more comfortable."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "chalk": {
+    "name": "Chalk",
+    "public_info": {"summary": "A small stick of chalk for marking paths, writing messages, or copying symbols."},
+    "dm_only": {},
+    "mechanics": {"consumable": true, "transferable": true, "category": "non_combat"}
+  },
+  "dagger": {
+    "name": "Dagger",
+    "public_info": {"summary": "A compact edged weapon that can also cut rope, prepare food, or serve as a precise hand tool."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "combat"}
+  },
+  "disguise_kit": {
+    "name": "Disguise Kit",
+    "public_info": {"summary": "Cosmetics, dyes, false hair, and small props used to alter a person's appearance."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "fairy_of_knowledge": {
+    "name": "Fairy of Knowledge",
+    "public_info": {"summary": "A permanent magical companion that instantly shares everything learned by one player character with the rest of the party."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": false, "category": "non_combat"}
+  },
+  "fine_clothes": {
+    "name": "Fine Clothes",
+    "public_info": {"summary": "Well-tailored clothing suited to formal gatherings and situations where appearance matters."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "grappling_hook": {
+    "name": "Grappling Hook",
+    "public_info": {"summary": "A sturdy metal hook designed to catch ledges, beams, branches, or other secure anchors."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "herbal_kit": {
+    "name": "Herbal Kit",
+    "public_info": {"summary": "Tools and containers for identifying, gathering, and preparing useful herbs."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "javelin": {
+    "name": "Javelin",
+    "public_info": {"summary": "A balanced throwing spear that can also function as a pole, probe, or improvised lever."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "combat"}
+  },
+  "lantern": {
+    "name": "Lantern",
+    "public_info": {"summary": "A protected portable light source useful in darkness and poor weather."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "longsword": {
+    "name": "Longsword",
+    "public_info": {"summary": "A sturdy one-handed sword carried by the Warrior."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "combat"}
+  },
+  "lute": {
+    "name": "Lute",
+    "public_info": {"summary": "A stringed instrument suitable for performance, accompaniment, and attracting attention."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "magnifying_lens": {
+    "name": "Magnifying Lens",
+    "public_info": {"summary": "A handheld lens for examining fine writing, tiny mechanisms, tracks, and physical evidence."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "notebook": {
+    "name": "Notebook",
+    "public_info": {"summary": "A bound collection of blank pages for notes, sketches, copied clues, and messages."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "phoenix_of_invincibility": {
+    "name": "Phoenix of Invincibility",
+    "public_info": {"summary": "A personal magical safeguard reserved for the future combat system."},
+    "dm_only": {},
+    "mechanics": {"consumable": true, "transferable": false, "category": "combat"}
+  },
+  "rapier": {
+    "name": "Rapier",
+    "public_info": {"summary": "A slender, precisely balanced sword carried by the Bard."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "combat"}
+  },
+  "rope": {
+    "name": "Rope",
+    "public_info": {"summary": "A durable length of rope for climbing, securing objects, binding, or improvising simple mechanisms."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "shield": {
+    "name": "Shield",
+    "public_info": {"summary": "A broad defensive shield that can also brace, block, or push objects."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "combat"}
+  },
+  "shortbow": {
+    "name": "Shortbow",
+    "public_info": {"summary": "A compact bow carried by the Rogue."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "combat"}
+  },
+  "smoke_bomb_kit": {
+    "name": "Smoke Bomb Kit",
+    "public_info": {"summary": "A compact kit of prepared materials used by the Rogue's Smoke Bomb ability."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "combat"}
+  },
+  "spellbook": {
+    "name": "Spellbook",
+    "public_info": {"summary": "A Wizard's collection of magical notes, diagrams, formulae, and observations."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "staff": {
+    "name": "Staff",
+    "public_info": {"summary": "A sturdy walking staff useful for support, probing uncertain ground, and channeling magic."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "combat"}
+  },
+  "thieves_tools": {
+    "name": "Thieves' Tools",
+    "public_info": {"summary": "Fine picks, probes, files, and clamps for working with locks and delicate mechanisms."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  },
+  "torch": {
+    "name": "Torch",
+    "public_info": {"summary": "A portable wooden light source whose current state may change if it burns, becomes wet, or is damaged."},
+    "dm_only": {},
+    "mechanics": {"consumable": true, "transferable": true, "category": "non_combat"}
+  },
+  "war_hating_gods_bow": {
+    "name": "War-Hating God's Bow",
+    "public_info": {"summary": "A personal divine weapon reserved for the future combat system."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": false, "category": "combat"}
+  },
+  "waterskin": {
+    "name": "Waterskin",
+    "public_info": {"summary": "A refillable leather container for carrying drinking water."},
+    "dm_only": {},
+    "mechanics": {"consumable": false, "transferable": true, "category": "non_combat"}
+  }
+}

@@ -3,8 +3,10 @@ from copy import deepcopy
 from django.db import transaction
 
 from .models import (
+    AbilityInstance,
     CharacterInstance,
     DndSession,
+    ItemInstance,
     LocationInstance,
     LocationTemplate,
     NPCInstance,
@@ -210,6 +212,7 @@ def create_campaign(
             ),
             status=template.initial_status,
             state_json=deepcopy(template.definition_json),
+            mechanics_json=deepcopy(template.mechanics_json),
         )
 
     quests_by_template = {}
@@ -273,11 +276,13 @@ def create_campaign(
     ][0]
     starting_location = locations_by_template[starting_location_template.id]
     for template, name in selected_characters:
-        CharacterInstance.objects.create(
+        mechanics = deepcopy(template.character_template)
+        mechanics.pop("conditions", None)
+        character = CharacterInstance.objects.create(
             dnd_session=campaign,
             name=name.strip(),
             template_json=deepcopy(template.character_template),
-            mechanics_json=deepcopy(template.character_template),
+            mechanics_json=mechanics,
             current_location=starting_location,
             relationships_json=[
                 {
@@ -289,6 +294,31 @@ def create_campaign(
                 }
             ],
         )
+        AbilityInstance.objects.bulk_create(
+            [
+                AbilityInstance(
+                    character=character,
+                    template=ability_template,
+                    remaining_uses=ability_template.max_uses,
+                )
+                for ability_template in template.ability_templates.filter(active=True)
+            ]
+        )
+        item_instances = []
+        for loadout_item in template.starting_items.select_related(
+            "item_template"
+        ).filter(item_template__active=True):
+            item_instances.extend(
+                ItemInstance(
+                    dnd_session=campaign,
+                    template=loadout_item.item_template,
+                    name=loadout_item.item_template.name,
+                    owner_type=ItemInstance.OwnerType.CHARACTER,
+                    owner_id=character.id,
+                )
+                for _ in range(loadout_item.starting_quantity)
+            )
+        ItemInstance.objects.bulk_create(item_instances)
 
     campaign.current_location = starting_location
     campaign.main_quest = quests_by_template[main_quest_template.id]

@@ -50,19 +50,20 @@ Trained skills identify the checks that receive the character's +2 trained
 skill bonus. Strong saves list the character's best saving throw modifiers.
 
 [[future-combat]]Attacks list the attack's name, attack bonus, damage, and
-range.[[/future-combat]] Abilities list their target, range, required roll,
-effect, and usage limit.
+range.[[/future-combat]] Abilities list their target, required roll, effect, and
+usage limit.
 
-Gear records carried weapons, armor, tools, consumable items, and gold.
-Conditions, current HP, ability uses, inventory quantities, and location are
-dynamic state and must remain current throughout the adventure.
+Gear records carried weapons, armor, tools, consumable items, and gold. Current
+HP, ability uses, individual item instances, item state, and location are dynamic
+state and must remain current throughout the adventure. Combat statistics remain
+stored for future combat but are not displayed in the combatless interface.
 
 Every character begins with a Phoenix of Invincibility and a War-Hating God's
 Bow in addition to class-specific gear. Every character is also accompanied by
 a Fairy of Knowledge.
 
 Each character has a name, class, attributes, trained skills, strong saves,
-abilities, gear, conditions, and an independent location.
+abilities, gear, and an independent location.
 [[future-combat]]Combat adds HP, AC, an Initiative modifier, and attacks.
 [[/future-combat]]
 
@@ -84,8 +85,7 @@ Investigation, Perception, Survival, Insight, Persuasion, Deception,
 Intimidation, and Performance. A trained skill adds +2 when applicable.
 
 [[future-combat]]Attacks list an attack bonus, damage, and range.
-[[/future-combat]]Abilities define their target, range, roll, effect, and usage
-limit.
+[[/future-combat]]Abilities define their target, roll, effect, and usage limit.
 
 CORE ROLLS
 
@@ -118,6 +118,11 @@ ADVANTAGE AND DISADVANTAGE
 
 Every applicable source of advantage contributes +1. Every applicable source
 of disadvantage contributes -1. Add all sources before rolling.
+
+Distinct situational sources created by the AI stack. The same source cannot be
+applied more than once. The AI may create advantage or disadvantage sources but
+cannot invent flat numerical modifiers; flat bonuses and penalties must come
+from validated item, ability, or system definitions.
 
 A positive result rolls that many additional d20s and takes the highest. A
 negative result rolls that many additional d20s and takes the lowest. A total
@@ -168,38 +173,17 @@ Player characters share everything any one of them learns through the Fairy of
 Knowledge, even while separated. [[future-combat]]Combat includes only creatures
 present at the relevant location.[[/future-combat]]
 
-CONDITIONS
-
-Prone: The character can only crawl, has disadvantage on attacks, and attackers
-have advantage against the character.
-
-Restrained: Movement is zero, attacks against the character have advantage,
-the character's attacks have disadvantage, and Dexterity saving throws have
-disadvantage.
-
-Stunned: The character is incapacitated, cannot act or move, can speak only
-falteringly, automatically fails Strength and Dexterity saving throws, and
-attacks against the character have advantage.
-
-Exhausted: All ability checks have disadvantage, and changing one distance band
-consumes the character's action.
-
-Prone, Restrained, and Stunned expire after the affected character completes
-two turns. A complete turn spent resting removes all conditions, including
-Exhausted.
-
 HEALTH AND RECOVERY
 
 Damage reduces HP. Healing cannot raise HP above maximum HP. At zero HP, a
 character dies.
 
 Every character possesses a Phoenix of Invincibility. Death immediately
-triggers the Phoenix, restores the character to maximum HP, removes all
-conditions, and records a resurrection event.
+triggers the Phoenix, restores the character to maximum HP, and records a
+resurrection event.
 
-A normal rest requires one complete turn of doing nothing and removes
-conditions. Sleeping, including taking a nap or staying at an inn, restores
-maximum HP and all limited-use abilities.
+A rest requires one complete turn of doing nothing. It restores maximum HP and
+all limited-use abilities.
 
 [[future-combat]]
 WAR-HATING GOD'S BOW
@@ -243,8 +227,9 @@ quest completes the campaign; no further player actions or state changes occur.
 7. The AI narrates only the validated results.
 8. The process repeats.
 
-Authoritative state includes HP, conditions, inventory, locations,
-relationships, NPC knowledge, discovered clues, world objects, and pending
+Authoritative state includes HP, ability uses, roll modifiers, individual item
+state and ownership, locations, relationships, NPC knowledge, discovered clues,
+world objects, and pending
 clarifications. [[future-combat]]Combat adds authoritative combat state.
 [[/future-combat]]
 

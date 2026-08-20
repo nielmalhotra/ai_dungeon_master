@@ -731,11 +731,6 @@
                 <h3 id="character-{{ sheet.instance.id }}-name">{{ sheet.instance.name }}</h3>
                 <span class="character-class">{{ sheet.instance.template_json.class }}</span>
               </div>
-              <div class="combat-stats">
-                <div class="stat"><span class="stat-label">HP</span><span class="stat-value">{{ sheet.instance.template_json.hp.current }}/{{ sheet.instance.template_json.hp.maximum }}</span></div>
-                <div class="stat"><span class="stat-label">AC</span><span class="stat-value">{{ sheet.instance.template_json.ac }}</span></div>
-                <div class="stat"><span class="stat-label">Initiative</span><span class="stat-value">+{{ sheet.instance.template_json.initiative_modifier }}</span></div>
-              </div>
               <div class="attribute-grid">
                 {% for attribute in sheet.attributes %}
                   <div class="stat"><span class="stat-label">{{ attribute.label }}</span><span class="stat-value">{% if attribute.value >= 0 %}+{% endif %}{{ attribute.value }}</span></div>
@@ -750,27 +745,19 @@
                 <p>{% for save, value in sheet.instance.template_json.strong_saves.items %}{{ save|title }} {% if value >= 0 %}+{% endif %}{{ value }}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
               </div>
               <div class="sheet-section">
-                <h4>Attacks</h4>
-                <ul>
-                  {% for attack in sheet.instance.template_json.attacks %}
-                    <li>{{ attack.name }}: +{{ attack.attack_bonus }}, {{ attack.damage.dice_count }}d{{ attack.damage.dice_sides }}{% if attack.damage.modifier > 0 %}+{{ attack.damage.modifier }}{% elif attack.damage.modifier < 0 %}{{ attack.damage.modifier }}{% endif %}, {{ attack.range|join:", " }}</li>
-                  {% endfor %}
-                </ul>
-              </div>
-              <div class="sheet-section">
-                <h4>Abilities</h4>
+                <h4>Non-combat abilities</h4>
                 <ul class="ability-list">
-                  {% for ability in sheet.instance.template_json.abilities %}
+                  {% for ability in sheet.abilities %}
                     <li>
-                      <strong>{{ ability.name }}</strong>
-                      <span>{{ ability.explanation }}</span>
+                      <strong>{{ ability.template.name }}</strong>
+                      <span>{{ ability.template.description }}{% if ability.template.max_uses %} Uses: {{ ability.remaining_uses }}/{{ ability.template.max_uses }}.{% endif %}</span>
                     </li>
                   {% endfor %}
                 </ul>
               </div>
               <div class="sheet-section">
                 <h4>Gear</h4>
-                <p>{% for item in sheet.instance.template_json.gear %}{{ item.name }}{% if item.quantity > 1 %} ({{ item.quantity }}){% endif %}{% if not forloop.last %}, {% endif %}{% endfor %}</p>
+                <p>{% for item in sheet.items %}<span title="{{ item.summary }}">{{ item.name }}{% if item.quantity > 1 %} ({{ item.quantity }}){% endif %}</span>{% if not forloop.last %}, {% endif %}{% endfor %}</p>
               </div>
             </section>
           {% endfor %}

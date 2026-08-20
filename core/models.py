@@ -20,6 +20,25 @@ def empty_initially_known_entities():
     }
 
 
+def empty_roll_modifiers():
+    return []
+
+
+def empty_npc_mechanics():
+    return {
+        "attributes": {
+            "strength": 0,
+            "dexterity": 0,
+            "constitution": 0,
+            "intelligence": 0,
+            "wisdom": 0,
+            "charisma": 0,
+        },
+        "trained_skills": [],
+        "strong_saves": [],
+    }
+
+
 class Visibility(models.TextChoices):
     PUBLIC_INFO = "public_info", "Public info"
     DM_ONLY = "dm_only", "DM only"
@@ -35,6 +54,102 @@ class CharacterTemplate(models.Model):
 
     def __str__(self):
         return self.character_template.get("class", self.template_key)
+
+
+class AbilityTemplate(models.Model):
+    class Category(models.TextChoices):
+        NON_COMBAT = "non_combat", "Non-combat"
+        COMBAT = "combat", "Combat"
+
+    character_template = models.ForeignKey(
+        CharacterTemplate,
+        on_delete=models.CASCADE,
+        related_name="ability_templates",
+    )
+    ability_key = models.CharField(max_length=64)
+    name = models.CharField(max_length=120)
+    active = models.BooleanField(default=True)
+    category = models.CharField(
+        max_length=16,
+        choices=Category.choices,
+        default=Category.COMBAT,
+    )
+    description = models.TextField()
+    resolution_json = models.JSONField(default=dict)
+    effect_json = models.JSONField(default=dict)
+    max_uses = models.PositiveIntegerField(null=True, blank=True)
+    recharge = models.CharField(max_length=32, null=True, blank=True)
+    embedding = VectorField(
+        dimensions=settings.EMBEDDING_DIMENSIONS,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ability_template"
+        ordering = ["character_template", "ability_key"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["character_template", "ability_key"],
+                name="uniq_character_ability_tpl",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.character_template}: {self.name}"
+
+
+class ItemTemplate(models.Model):
+    template_key = models.CharField(max_length=64, unique=True)
+    name = models.CharField(max_length=120)
+    active = models.BooleanField(default=True)
+    definition_json = models.JSONField(default=empty_visibility_state)
+    mechanics_json = models.JSONField(default=dict)
+    public_embedding = VectorField(
+        dimensions=settings.EMBEDDING_DIMENSIONS,
+        null=True,
+        blank=True,
+    )
+    dm_embedding = VectorField(
+        dimensions=settings.EMBEDDING_DIMENSIONS,
+        null=True,
+        blank=True,
+    )
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "item_template"
+        ordering = ["template_key"]
+
+    def __str__(self):
+        return self.name
+
+
+class CharacterTemplateItem(models.Model):
+    character_template = models.ForeignKey(
+        CharacterTemplate,
+        on_delete=models.CASCADE,
+        related_name="starting_items",
+    )
+    item_template = models.ForeignKey(
+        ItemTemplate,
+        on_delete=models.CASCADE,
+        related_name="character_loadouts",
+    )
+    starting_quantity = models.PositiveIntegerField(default=1)
+
+    class Meta:
+        db_table = "character_template_item"
+        ordering = ["character_template", "item_template"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["character_template", "item_template"],
+                name="uniq_character_starting_item",
+            )
+        ]
 
 
 class DndSession(models.Model):
@@ -103,6 +218,7 @@ class CharacterInstance(models.Model):
     name = models.CharField(max_length=80)
     template_json = models.JSONField()
     mechanics_json = models.JSONField(default=dict)
+    modifiers_json = models.JSONField(default=empty_roll_modifiers)
     current_location = models.ForeignKey(
         "LocationInstance",
         null=True,
@@ -122,6 +238,124 @@ class CharacterInstance(models.Model):
     def __str__(self):
         character_class = self.template_json.get("class", "Character")
         return f"{self.name} ({character_class})"
+
+
+class AbilityInstance(models.Model):
+    character = models.ForeignKey(
+        CharacterInstance,
+        on_delete=models.CASCADE,
+        related_name="abilities",
+    )
+    template = models.ForeignKey(
+        AbilityTemplate,
+        on_delete=models.PROTECT,
+        related_name="instances",
+    )
+    remaining_uses = models.PositiveIntegerField(null=True, blank=True)
+    state_json = models.JSONField(default=empty_visibility_state)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "ability_instance"
+        ordering = ["character", "template"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["character", "template"],
+                name="uniq_character_ability_instance",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.character.name}: {self.template.name}"
+
+
+class ItemInstance(models.Model):
+    class OwnerType(models.TextChoices):
+        CHARACTER = "character", "Character"
+        NPC = "npc", "NPC"
+
+    class Status(models.TextChoices):
+        ACTIVE = "active", "Active"
+        CONSUMED = "consumed", "Consumed"
+        DESTROYED = "destroyed", "Destroyed"
+
+    dnd_session = models.ForeignKey(
+        DndSession,
+        on_delete=models.CASCADE,
+        related_name="items",
+    )
+    template = models.ForeignKey(
+        ItemTemplate,
+        null=True,
+        blank=True,
+        on_delete=models.PROTECT,
+        related_name="instances",
+    )
+    name = models.CharField(max_length=120)
+    owner_type = models.CharField(
+        max_length=16,
+        choices=OwnerType.choices,
+        null=True,
+        blank=True,
+    )
+    owner_id = models.PositiveBigIntegerField(null=True, blank=True)
+    current_location = models.ForeignKey(
+        "LocationInstance",
+        null=True,
+        blank=True,
+        on_delete=models.SET_NULL,
+        related_name="items",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.ACTIVE,
+    )
+    state_json = models.JSONField(default=empty_visibility_state)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "item_instance"
+        ordering = ["id"]
+        constraints = [
+            models.CheckConstraint(
+                check=(
+                    Q(owner_type__isnull=True, owner_id__isnull=True)
+                    | Q(owner_type__isnull=False, owner_id__isnull=False)
+                ),
+                name="item_owner_pair_ck",
+            ),
+            models.CheckConstraint(
+                check=(
+                    Q(owner_id__isnull=True)
+                    | Q(current_location__isnull=True)
+                ),
+                name="item_owner_location_exclusive_ck",
+            ),
+            models.CheckConstraint(
+                check=(
+                    ~Q(status="active")
+                    | Q(owner_id__isnull=False)
+                    | Q(current_location__isnull=False)
+                ),
+                name="item_active_placement_ck",
+            ),
+        ]
+        indexes = [
+            models.Index(
+                fields=["dnd_session", "owner_type", "owner_id", "status"],
+                name="item_session_owner_idx",
+            ),
+            models.Index(
+                fields=["dnd_session", "current_location", "status"],
+                name="item_session_loc_idx",
+            ),
+        ]
+
+    def __str__(self):
+        return self.name
 
 
 class LocationTemplate(models.Model):
@@ -264,6 +498,7 @@ class NPCTemplate(models.Model):
         default=InitialStatus.ACTIVE,
     )
     definition_json = models.JSONField(default=empty_visibility_state)
+    mechanics_json = models.JSONField(default=empty_npc_mechanics)
     relationships_json = models.JSONField(default=list)
     metadata_json = models.JSONField(default=dict)
     public_embedding = VectorField(
@@ -329,6 +564,8 @@ class NPCInstance(models.Model):
         choices=Status.choices,
         default=Status.ACTIVE,
     )
+    mechanics_json = models.JSONField(default=empty_npc_mechanics)
+    modifiers_json = models.JSONField(default=empty_roll_modifiers)
     state_json = models.JSONField(default=empty_visibility_state)
     relationships_json = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -617,6 +854,8 @@ class RetrievedContextRecord(models.Model):
         LOCATION = "location", "Location"
         QUEST = "quest", "Quest"
         WORLD_EVENT = "world_event", "World event"
+        ABILITY = "ability", "Ability"
+        ITEM = "item", "Item"
 
     agent_run = models.ForeignKey(
         AgentRun,
