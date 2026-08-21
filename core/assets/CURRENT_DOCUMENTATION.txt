@@ -173,6 +173,12 @@ Player characters share everything any one of them learns through the Fairy of
 Knowledge, even while separated. [[future-combat]]Combat includes only creatures
 present at the relevant location.[[/future-combat]]
 
+Mutable relationships are directional and stored on the character or NPC whose
+relationship is being described. Public relationship information is safe for
+the party; hidden motives and attitudes remain DM-only. A relationship update
+fully replaces that source entity's public and DM-only descriptions of the
+target after validating that both entities belong to the campaign.
+
 HEALTH AND RECOVERY
 
 Damage reduces HP. Healing cannot raise HP above maximum HP. At zero HP, a
@@ -214,8 +220,11 @@ requested movement can be completed within the character's movement allowance.
 GAME LOOP
 
 The campaign begins with the authored opening and all characters at the authored
-starting location. The configured main quest is always active. Finishing the main
-quest completes the campaign; no further player actions or state changes occur.
+starting location. The configured main quest is always active. Quests progress
+through public, zero-based conditions that must be completed in order. Each
+completed condition records a public description of what happened. Completing a
+quest's final condition finishes it. Finishing the main quest completes the
+campaign; no further player actions or state changes occur.
 
 1. The DM describes the current scenes and facts available to the characters.
 2. The player submits the party command.
@@ -228,8 +237,8 @@ quest completes the campaign; no further player actions or state changes occur.
 8. The process repeats.
 
 Authoritative state includes HP, ability uses, roll modifiers, individual item
-state and ownership, locations, relationships, NPC knowledge, discovered clues,
-world objects, and pending
+state and ownership, locations, relationships, ordered quest progress, NPC
+knowledge, discovered clues, world objects, and pending
 clarifications. [[future-combat]]Combat adds authoritative combat state.
 [[/future-combat]]
 

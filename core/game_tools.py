@@ -18,19 +18,22 @@ from .models import (
     ItemInstance,
     LocationInstance,
     NPCInstance,
+    QuestConditionInstance,
     QuestInstance,
     ToolCallRecord,
     WorldEvent,
 )
 from .schemas import (
     AddRollModifierInput,
+    AdvanceQuestInput,
     ConsumeItemInput,
     EntityStateUpdate,
-    FinishQuestInput,
     MoveCharacterInput,
     MoveItemInput,
     MoveNPCInput,
     RemoveRollModifierInput,
+    RelationshipSourceType,
+    RelationshipTargetType,
     RestCharacterInput,
     RollCheckInput,
     RollContestInput,
@@ -45,6 +48,7 @@ from .schemas import (
     ToolResult,
     TransferItemInput,
     UpdateItemStateInput,
+    UpdateRelationshipInput,
     UseAbilityInput,
 )
 
@@ -54,6 +58,20 @@ _SYSTEM_RANDOM = SystemRandom()
 _OWNER_TYPES = {
     RuntimeEntityType.CHARACTER: ItemInstance.OwnerType.CHARACTER,
     RuntimeEntityType.NPC: ItemInstance.OwnerType.NPC,
+}
+_RELATIONSHIP_SOURCE_MODELS = {
+    RelationshipSourceType.CHARACTER: CharacterInstance,
+    RelationshipSourceType.NPC: NPCInstance,
+}
+_RELATIONSHIP_TARGET_MODELS = {
+    RelationshipTargetType.CHARACTER: CharacterInstance,
+    RelationshipTargetType.NPC: NPCInstance,
+    RelationshipTargetType.LOCATION: LocationInstance,
+}
+_RELATIONSHIP_ENTITY_TYPES = ("character", "npc", "location")
+_NEXT_QUEST_STATUS = {
+    QuestInstance.Status.HIDDEN: QuestInstance.Status.AVAILABLE,
+    QuestInstance.Status.AVAILABLE: QuestInstance.Status.ACTIVE,
 }
 
 
@@ -577,6 +595,135 @@ def _handle_remove_roll_modifier(tool_call, arguments):
     )
 
 
+def _relationship_state_buckets(state):
+    if not isinstance(state, dict):
+        raise GameToolError("The source entity has invalid relationship state.")
+    buckets = {}
+    for visibility in ("public_info", "dm_only"):
+        branch = state.setdefault(visibility, {})
+        if not isinstance(branch, dict):
+            raise GameToolError("The source entity has invalid visibility state.")
+        relationships = branch.setdefault("relationships", {})
+        if not isinstance(relationships, dict):
+            raise GameToolError("The source entity has invalid relationship state.")
+        for entity_type in _RELATIONSHIP_ENTITY_TYPES:
+            bucket = relationships.setdefault(entity_type, {})
+            if not isinstance(bucket, dict):
+                raise GameToolError("The source entity has invalid relationship state.")
+        buckets[visibility] = relationships
+    return buckets
+
+
+def _handle_update_relationship(tool_call, arguments):
+    campaign = _tool_campaign(tool_call)
+    source_model = _RELATIONSHIP_SOURCE_MODELS[arguments.entity_to_update.type]
+    target_model = _RELATIONSHIP_TARGET_MODELS[arguments.target.type]
+    try:
+        source = source_model.objects.select_for_update().get(
+            pk=arguments.entity_to_update.id,
+            dnd_session=campaign,
+        )
+    except source_model.DoesNotExist as exc:
+        raise GameToolError(
+            "The relationship source does not belong to this campaign."
+        ) from exc
+    try:
+        target = target_model.objects.get(
+            pk=arguments.target.id,
+            dnd_session=campaign,
+        )
+    except target_model.DoesNotExist as exc:
+        raise GameToolError(
+            "The relationship target does not belong to this campaign."
+        ) from exc
+    if (
+        arguments.entity_to_update.type.value == arguments.target.type.value
+        and source.id == target.id
+    ):
+        raise GameToolError("An entity cannot have a relationship with itself.")
+
+    state = deepcopy(source.state_json)
+    buckets = _relationship_state_buckets(state)
+    target_type = arguments.target.type.value
+    target_key = str(target.id)
+    previous_public = deepcopy(
+        buckets["public_info"][target_type].get(target_key, {})
+    )
+    previous_dm = deepcopy(buckets["dm_only"][target_type].get(target_key, {}))
+    current_public = deepcopy(arguments.public_info_json)
+    current_dm = deepcopy(arguments.dm_only_json)
+    changed = (
+        previous_public != current_public
+        or previous_dm != current_dm
+    )
+    source_reference = RuntimeEntityReference(
+        type=arguments.entity_to_update.type.value,
+        id=source.id,
+    )
+    target_reference = RuntimeEntityReference(
+        type=arguments.target.type.value,
+        id=target.id,
+    )
+    if not changed:
+        return ToolResult(
+            success=True,
+            message="The relationship already has the supplied state.",
+            affected_entities=[source_reference, target_reference],
+            data={"changed": False},
+        )
+
+    for visibility, replacement in (
+        ("public_info", current_public),
+        ("dm_only", current_dm),
+    ):
+        bucket = buckets[visibility][target_type]
+        if replacement:
+            bucket[target_key] = replacement
+        else:
+            bucket.pop(target_key, None)
+    source.state_json = state
+    source.save(update_fields=["state_json", "updated_at"])
+
+    removed = not current_public and not current_dm
+    public_event_state = {}
+    if previous_public or current_public:
+        public_event_state = {
+            "summary": f"{source}'s relationship with {target} changed.",
+            "previous_relationship": previous_public,
+            "current_relationship": current_public,
+        }
+    event = _create_world_event(
+        tool_call,
+        "relationship_removed" if removed else "relationship_updated",
+        [_dump(source_reference), _dump(target_reference)],
+        public_event_state,
+        {
+            "summary": f"{source}'s relationship with {target} changed.",
+            "previous_relationship": previous_dm,
+            "current_relationship": current_dm,
+        },
+        importance=2,
+    )
+    return ToolResult(
+        success=True,
+        message=f"Updated {source}'s relationship with {target}.",
+        affected_entities=[source_reference, target_reference],
+        world_event_id=event.id,
+        data={
+            "changed": True,
+            "removed": removed,
+            "previous": {
+                "public_info": previous_public,
+                "dm_only": previous_dm,
+            },
+            "current": {
+                "public_info": current_public,
+                "dm_only": current_dm,
+            },
+        },
+    )
+
+
 def _replace_located_in_relationship(relationships, location_id):
     retained = [
         relationship
@@ -985,6 +1132,11 @@ def _handle_consume_item(tool_call, arguments):
 
 
 def _merge_visibility_state(current, patch):
+    for branch in (patch.public_info, patch.dm_only):
+        if branch is not None and "relationships" in branch:
+            raise GameToolError(
+                "Relationship state must be changed with update_relationship."
+            )
     state = deepcopy(current or {"public_info": {}, "dm_only": {}})
     state.setdefault("public_info", {})
     state.setdefault("dm_only", {})
@@ -1072,7 +1224,7 @@ def _handle_update_entity_state(tool_call, arguments):
     )
 
 
-def _handle_finish_quest(tool_call, arguments):
+def _handle_advance_quest(tool_call, arguments):
     campaign = _tool_campaign(tool_call)
     try:
         quest = QuestInstance.objects.select_for_update().get(
@@ -1083,31 +1235,126 @@ def _handle_finish_quest(tool_call, arguments):
         raise GameToolError("The quest does not belong to this campaign.") from exc
     if quest.status == QuestInstance.Status.FINISHED:
         raise GameToolError("The quest is already finished.")
-    quest.status = QuestInstance.Status.FINISHED
-    quest.save(update_fields=["status", "updated_at"])
-    campaign_completed = campaign.main_quest_id == quest.id
+
+    previous_status = quest.status
+    if arguments.state is not None:
+        requested_status = arguments.state.value
+        if _NEXT_QUEST_STATUS.get(quest.status) != requested_status:
+            raise GameToolError(
+                "Quest status must advance exactly from hidden to available or "
+                "from available to active."
+            )
+        quest.status = requested_status
+
+    condition = None
+    quest_finished = False
+    campaign_completed = False
+    if arguments.step_completed is not None:
+        if quest.status != QuestInstance.Status.ACTIVE:
+            raise GameToolError("A quest must be active before completing a step.")
+        if quest.template_id is None:
+            raise GameToolError("The quest does not have authored conditions.")
+        condition_count = quest.template.conditions.count()
+        instance_count = quest.conditions.count()
+        finished_count = quest.conditions.filter(
+            status=QuestConditionInstance.Status.FINISHED
+        ).count()
+        if (
+            instance_count != condition_count
+            or finished_count != quest.steps_completed
+        ):
+            raise GameToolError("The quest condition state is inconsistent.")
+        if arguments.step_completed != quest.steps_completed:
+            raise GameToolError(
+                f"The next quest step is {quest.steps_completed}, not "
+                f"{arguments.step_completed}."
+            )
+        try:
+            condition = (
+                QuestConditionInstance.objects.select_for_update()
+                .select_related("template")
+                .get(
+                    quest_instance=quest,
+                    template__quest_template_id=quest.template_id,
+                    template__order=arguments.step_completed,
+                )
+            )
+        except QuestConditionInstance.DoesNotExist as exc:
+            raise GameToolError(
+                f"Quest step {arguments.step_completed} is not configured."
+            ) from exc
+        if condition.status != QuestConditionInstance.Status.NOT_FINISHED:
+            raise GameToolError("The next quest step is already finished.")
+
+        condition.status = QuestConditionInstance.Status.FINISHED
+        condition.finish_text = arguments.finish_text
+        condition.save(update_fields=["status", "finish_text", "updated_at"])
+        quest.steps_completed += 1
+        if quest.steps_completed == condition_count:
+            quest.status = QuestInstance.Status.FINISHED
+            quest_finished = True
+            campaign_completed = campaign.main_quest_id == quest.id
+
+    quest.save(update_fields=["status", "steps_completed", "updated_at"])
     if campaign_completed:
         campaign.status = DndSession.Status.COMPLETED
         campaign.save(update_fields=["status", "updated_at"])
+
+    if condition is not None:
+        public_info = {
+            "summary": arguments.finish_text,
+            "quest": quest.title,
+            "condition": condition.template.text,
+            "step_completed": condition.template.order,
+            "finish_text": arguments.finish_text,
+            "previous_status": previous_status,
+            "status": quest.status,
+            "steps_completed": quest.steps_completed,
+            "quest_finished": quest_finished,
+            "campaign_completed": campaign_completed,
+        }
+        event_type = "quest_finished" if quest_finished else "quest_advanced"
+        message = (
+            f"Finished {quest}."
+            if quest_finished
+            else f"Completed step {condition.template.order} of {quest}."
+        )
+    else:
+        public_info = {
+            "summary": f"{quest} became {quest.status}.",
+            "quest": quest.title,
+            "previous_status": previous_status,
+            "status": quest.status,
+            "steps_completed": quest.steps_completed,
+            "quest_finished": False,
+            "campaign_completed": False,
+        }
+        event_type = "quest_status_changed"
+        message = f"Advanced {quest} to {quest.status}."
+
     event = _create_world_event(
         tool_call,
-        "quest_finished",
+        event_type,
         [_entity_ref(RuntimeEntityType.QUEST.value, quest.id)],
-        {
-            "summary": f"{quest} was finished.",
-            "campaign_completed": campaign_completed,
-        },
-        {"reason": arguments.reason},
-        importance=5 if campaign_completed else 4,
+        public_info,
+        importance=(5 if campaign_completed else 4 if quest_finished else 3),
     )
     return ToolResult(
         success=True,
-        message=f"Finished {quest}.",
+        message=message,
         affected_entities=[
             RuntimeEntityReference(type=RuntimeEntityType.QUEST, id=quest.id)
         ],
         world_event_id=event.id,
-        data={"campaign_completed": campaign_completed},
+        data={
+            "status": quest.status,
+            "steps_completed": quest.steps_completed,
+            "step_completed": (
+                condition.template.order if condition is not None else None
+            ),
+            "quest_finished": quest_finished,
+            "campaign_completed": campaign_completed,
+        },
     )
 
 
@@ -1118,6 +1365,7 @@ TOOL_REGISTRY = {
     "roll_contest": (RollContestInput, _handle_roll_contest),
     "add_roll_modifier": (AddRollModifierInput, _handle_add_roll_modifier),
     "remove_roll_modifier": (RemoveRollModifierInput, _handle_remove_roll_modifier),
+    "update_relationship": (UpdateRelationshipInput, _handle_update_relationship),
     "move_character": (MoveCharacterInput, _handle_move_character),
     "move_npc": (MoveNPCInput, _handle_move_npc),
     "use_ability": (UseAbilityInput, _handle_use_ability),
@@ -1127,7 +1375,7 @@ TOOL_REGISTRY = {
     "consume_item": (ConsumeItemInput, _handle_consume_item),
     "update_item_state": (UpdateItemStateInput, _handle_update_item_state),
     "update_entity_state": (EntityStateUpdate, _handle_update_entity_state),
-    "finish_quest": (FinishQuestInput, _handle_finish_quest),
+    "advance_quest": (AdvanceQuestInput, _handle_advance_quest),
 }
 
 

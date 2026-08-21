@@ -15,6 +15,12 @@ class Command(BaseCommand):
         parser.add_argument("filename")
         parser.add_argument("name")
         parser.add_argument("--initial-status")
+        parser.add_argument(
+            "--condition",
+            action="append",
+            default=[],
+            help="Ordered quest condition; repeat once per step.",
+        )
 
     def handle(self, *args, **options):
         try:
@@ -24,6 +30,7 @@ class Command(BaseCommand):
                 filename=options["filename"],
                 name=options["name"],
                 initial_status=options["initial_status"],
+                conditions=options["condition"],
             )
         except ScenarioLoreError as exc:
             raise CommandError(str(exc)) from exc

@@ -12,6 +12,8 @@ from openai import OpenAI
 from .models import (
     LocationTemplate,
     NPCTemplate,
+    QuestConditionInstance,
+    QuestConditionTemplate,
     QuestTemplate,
     Visibility,
     WorldLoreChunkTemplate,
@@ -20,6 +22,7 @@ from .models import (
 
 VERSION_DIRECTORY_PATTERN = re.compile(r"^v(?P<version>[1-9]\d*)$")
 RELATION_NAME_PATTERN = re.compile(r"^[a-z][a-z0-9_]*$")
+CONDITION_LINE_PATTERN = re.compile(r"^(?P<order>\d+)\s*\|\s*(?P<text>.+)$")
 UUID_LINE_PATTERN = re.compile(r"^UUID: (?P<uuid>.+)$")
 UUID_PLACEHOLDER = "INSERT_UUID_HERE"
 ENTITY_FOLDERS = {
@@ -38,7 +41,7 @@ KNOWN_ENTITY_KEYS = {
 INITIAL_STATUS_VALUES = {
     "location": frozenset({"hidden", "active", "destroyed"}),
     "npc": frozenset({"hidden", "active", "dead"}),
-    "quest": frozenset({"hidden", "available", "active", "finished"}),
+    "quest": frozenset({"hidden", "available", "active"}),
 }
 REQUIRED_DEFINITION_FOLDERS = tuple(ENTITY_FOLDERS)
 TEMPLATE_MODELS = {
@@ -70,6 +73,7 @@ class ScenarioDefinition:
     name: str
     initial_status: Optional[str]
     relationships: Tuple[SourceRelationship, ...]
+    conditions: Tuple[str, ...]
     public_info: str
     dm_only: str
     match_text: str
@@ -220,6 +224,35 @@ def _parse_relationship(line, source_name):
     )
 
 
+def _parse_conditions(lines, source_name):
+    condition_lines = _nonempty_lines(lines)
+    if not condition_lines:
+        raise ScenarioLoreError(
+            f"{source_name} must define at least one quest condition."
+        )
+    conditions = []
+    for expected_order, line in enumerate(condition_lines):
+        match = CONDITION_LINE_PATTERN.fullmatch(line)
+        if match is None:
+            raise ScenarioLoreError(
+                f"{source_name} has invalid condition line {line!r}; expected "
+                "'<zero-based order> | <condition text>'."
+            )
+        order = int(match.group("order"))
+        if order != expected_order:
+            raise ScenarioLoreError(
+                f"{source_name} quest conditions must be ordered contiguously "
+                f"from 0; expected {expected_order}, received {order}."
+            )
+        text = match.group("text").strip()
+        if not text:
+            raise ScenarioLoreError(
+                f"{source_name} quest condition {order} has empty text."
+            )
+        conditions.append(text)
+    return tuple(conditions)
+
+
 def _definition_type_for_path(path):
     try:
         return ENTITY_FOLDERS[path.parent.name]
@@ -251,11 +284,24 @@ def _parse_definition_text(path, text, version, release_dir, allow_placeholder=F
     else:
         definition_uuid = _parse_uuid(uuid_value, "UUID", path.name)
 
-    relationships_index, public_index, dm_index = _section_positions(
-        lines,
-        ("RELATIONSHIPS:", "PUBLIC:", "DM_ONLY:"),
-        path.name,
-    )
+    if definition_type == "quest":
+        (
+            relationships_index,
+            conditions_index,
+            public_index,
+            dm_index,
+        ) = _section_positions(
+            lines,
+            ("RELATIONSHIPS:", "CONDITIONS:", "PUBLIC:", "DM_ONLY:"),
+            path.name,
+        )
+    else:
+        relationships_index, public_index, dm_index = _section_positions(
+            lines,
+            ("RELATIONSHIPS:", "PUBLIC:", "DM_ONLY:"),
+            path.name,
+        )
+        conditions_index = None
     header_lines = _nonempty_lines(lines[1:relationships_index])
     if not header_lines or not header_lines[0].startswith("NAME: "):
         raise ScenarioLoreError(
@@ -288,9 +334,19 @@ def _parse_definition_text(path, text, version, release_dir, allow_placeholder=F
             f"{path.name} has unsupported headers: {', '.join(extra_headers)}."
         )
 
+    relationships_end_index = (
+        conditions_index if conditions_index is not None else public_index
+    )
     relationships = tuple(
         _parse_relationship(line, path.name)
-        for line in _nonempty_lines(lines[relationships_index + 1 : public_index])
+        for line in _nonempty_lines(
+            lines[relationships_index + 1 : relationships_end_index]
+        )
+    )
+    conditions = (
+        _parse_conditions(lines[conditions_index + 1 : public_index], path.name)
+        if conditions_index is not None
+        else ()
     )
     public_info = "\n".join(lines[public_index + 1 : dm_index]).strip()
     dm_only = "\n".join(lines[dm_index + 1 :]).strip()
@@ -307,6 +363,7 @@ def _parse_definition_text(path, text, version, release_dir, allow_placeholder=F
         name=name,
         initial_status=initial_status,
         relationships=relationships,
+        conditions=conditions,
         public_info=public_info,
         dm_only=dm_only,
         match_text=match_text,
@@ -719,12 +776,19 @@ def _render_relationships(relationships):
     )
 
 
+def _render_conditions(conditions):
+    return "\n".join(
+        f"{order} | {condition}" for order, condition in enumerate(conditions)
+    )
+
+
 def render_definition_file(
     *,
     definition_type,
     name,
     initial_status=None,
     relationships=(),
+    conditions=(),
     public_info="",
     dm_only="",
     definition_uuid=UUID_PLACEHOLDER,
@@ -738,15 +802,27 @@ def render_definition_file(
             )
     elif initial_status is not None:
         raise ScenarioLoreError("World lore does not have an initial status.")
+    conditions = tuple(condition.strip() for condition in conditions)
+    if definition_type == "quest":
+        if not conditions or any(not condition for condition in conditions):
+            raise ScenarioLoreError("quest requires at least one non-empty condition.")
+    elif conditions:
+        raise ScenarioLoreError("Only quests may define conditions.")
     if isinstance(definition_uuid, UUID):
         definition_uuid = str(definition_uuid)
     header = [f"UUID: {definition_uuid}", f"NAME: {name}"]
     if initial_status is not None:
         header.append(f"INITIAL STATUS: {initial_status}")
+    conditions_section = (
+        "\n\nCONDITIONS:\n\n" + _render_conditions(conditions)
+        if definition_type == "quest"
+        else ""
+    )
     return (
         "\n".join(header)
         + "\n\nRELATIONSHIPS:\n\n"
         + _render_relationships(tuple(relationships))
+        + conditions_section
         + "\n\nPUBLIC:\n\n"
         + public_info.strip()
         + "\n\nDM_ONLY:\n\n"
@@ -763,6 +839,7 @@ def create_definition_file(
     name,
     initial_status=None,
     relationships=(),
+    conditions=(),
     public_info="",
     dm_only="",
 ):
@@ -784,6 +861,7 @@ def create_definition_file(
             name=name,
             initial_status=initial_status,
             relationships=relationships,
+            conditions=conditions,
             public_info=public_info,
             dm_only=dm_only,
         ),
@@ -930,8 +1008,22 @@ def build_scenario_embedding_inputs(release):
     for definition in release.definitions:
         if definition.definition_type == "world_lore":
             continue
+        public_content = definition.public_info
+        if definition.conditions:
+            rendered_conditions = "\n".join(
+                f"{order} | {condition}"
+                for order, condition in enumerate(definition.conditions)
+            )
+            public_content = "\n\n".join(
+                content
+                for content in (
+                    public_content,
+                    f"Conditions:\n{rendered_conditions}",
+                )
+                if content
+            )
         for visibility, content in (
-            (Visibility.PUBLIC_INFO, definition.public_info),
+            (Visibility.PUBLIC_INFO, public_content),
             (Visibility.DM_ONLY, definition.dm_only),
         ):
             if content:
@@ -1062,6 +1154,67 @@ def _compare_immutable(template, values, source_file):
             )
 
 
+def _sync_or_validate_quest_conditions(template, definition, created):
+    expected = tuple(enumerate(definition.conditions))
+    current = tuple(
+        template.conditions.order_by("order").values_list("order", "text")
+    )
+    if created or not current:
+        QuestConditionTemplate.objects.bulk_create(
+            [
+                QuestConditionTemplate(
+                    quest_template=template,
+                    order=order,
+                    text=text,
+                )
+                for order, text in expected
+            ]
+        )
+        return True
+    if current != expected:
+        raise ScenarioLoreError(
+            "Scenario release content changed without a version increase: "
+            f"{definition.source_file}."
+        )
+    return False
+
+
+def _backfill_unfinished_quest_condition_instances(template, source_file):
+    condition_templates = tuple(template.conditions.order_by("order"))
+    expected_template_ids = {condition.id for condition in condition_templates}
+    for quest_instance in template.instances.exclude(status="finished"):
+        existing = tuple(
+            quest_instance.conditions.values_list("template_id", "status")
+        )
+        if existing:
+            if (
+                {template_id for template_id, _ in existing}
+                != expected_template_ids
+                or sum(
+                    status == QuestConditionInstance.Status.FINISHED
+                    for _, status in existing
+                )
+                != quest_instance.steps_completed
+            ):
+                raise ScenarioLoreError(
+                    f"Runtime quest conditions do not match {source_file}."
+                )
+            continue
+        if quest_instance.steps_completed:
+            raise ScenarioLoreError(
+                f"Cannot backfill progressed quest conditions for {source_file}."
+            )
+        QuestConditionInstance.objects.bulk_create(
+            [
+                QuestConditionInstance(
+                    quest_instance=quest_instance,
+                    template=condition_template,
+                )
+                for condition_template in condition_templates
+            ]
+        )
+
+
 def _relationship_template_targets(relationship, templates_by_definition):
     targets = templates_by_definition.get(
         (relationship.target_type, relationship.target_uuid),
@@ -1179,6 +1332,7 @@ def sync_scenario_templates(
                 release,
                 definition.definition_uuid,
             )
+            created = template is None
             if template is None:
                 template = QuestTemplate.objects.create(
                     definition_uuid=definition.definition_uuid,
@@ -1197,6 +1351,20 @@ def sync_scenario_templates(
                     ),
                 )
                 created_templates.add((QuestTemplate, template.id))
+            adopted_conditions = _sync_or_validate_quest_conditions(
+                template,
+                definition,
+                created,
+            )
+            if adopted_conditions and not created:
+                template.public_embedding = embeddings.get(
+                    _embedding_key(definition, Visibility.PUBLIC_INFO)
+                )
+                template.save(update_fields=["public_embedding"])
+            _backfill_unfinished_quest_condition_instances(
+                template,
+                definition.source_file,
+            )
             templates_by_definition[("quest", definition.definition_uuid)] = (
                 template,
             )

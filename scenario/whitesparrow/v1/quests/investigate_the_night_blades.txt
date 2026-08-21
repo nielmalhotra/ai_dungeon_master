@@ -7,6 +7,12 @@ RELATIONSHIPS:
 involves | npc | db1041ba-2f74-44db-ba91-ef7408afff1a
 involves | location | 94546ab4-3d58-40e2-af49-70753e784f25
 
+CONDITIONS:
+
+0 | Discover credible evidence about the Night Blades' return.
+1 | Identify who is leading the Night Blades.
+2 | Uncover what the leader wants from Whitesparrow.
+
 PUBLIC:
 
 Armed bandits claiming the name of the Night Blades have returned to the valley.

@@ -240,7 +240,6 @@ class QuestInitialStatus(str, Enum):
     HIDDEN = "hidden"
     AVAILABLE = "available"
     ACTIVE = "active"
-    FINISHED = "finished"
 
 
 class QuestTemplateRecord(VersionedTemplateRecord):
@@ -251,6 +250,13 @@ class QuestTemplateRecord(VersionedTemplateRecord):
     metadata_json: JsonObject
     public_embedding: Optional[List[float]] = None
     dm_embedding: Optional[List[float]] = None
+
+
+class QuestConditionTemplateRecord(OrmSchema):
+    id: int = Field(gt=0)
+    quest_template_id: int = Field(gt=0)
+    order: int = Field(ge=0)
+    text: str
 
 
 class QuestStatus(str, Enum):
@@ -266,9 +272,24 @@ class QuestInstanceRecord(OrmSchema):
     template_id: Optional[int] = Field(default=None, gt=0)
     title: str
     status: QuestStatus
-    current_stage: int = Field(ge=0)
+    steps_completed: int = Field(ge=0)
     relationships_json: List[RuntimeRelationship] = Field(default_factory=list)
     state_json: QuestState
+    created_at: datetime
+    updated_at: datetime
+
+
+class QuestConditionStatus(str, Enum):
+    NOT_FINISHED = "not_finished"
+    FINISHED = "finished"
+
+
+class QuestConditionInstanceRecord(OrmSchema):
+    id: int = Field(gt=0)
+    quest_instance_id: int = Field(gt=0)
+    template_id: int = Field(gt=0)
+    status: QuestConditionStatus
+    finish_text: Optional[str] = None
     created_at: datetime
     updated_at: datetime
 
@@ -602,6 +623,40 @@ class RemoveRollModifierInput(BaseModel):
     modifier_id: UUID
 
 
+class RelationshipSourceType(str, Enum):
+    CHARACTER = "character"
+    NPC = "npc"
+
+
+class RelationshipTargetType(str, Enum):
+    CHARACTER = "character"
+    NPC = "npc"
+    LOCATION = "location"
+
+
+class RelationshipSourceReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: RelationshipSourceType
+    id: int = Field(gt=0)
+
+
+class RelationshipTargetReference(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    type: RelationshipTargetType
+    id: int = Field(gt=0)
+
+
+class UpdateRelationshipInput(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    entity_to_update: RelationshipSourceReference
+    target: RelationshipTargetReference
+    public_info_json: JsonObject
+    dm_only_json: JsonObject
+
+
 class MoveCharacterInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -672,11 +727,32 @@ class EntityStateUpdate(BaseModel):
     reason: str
 
 
-class FinishQuestInput(BaseModel):
+class QuestAdvanceState(str, Enum):
+    HIDDEN = "hidden"
+    AVAILABLE = "available"
+    ACTIVE = "active"
+
+
+class AdvanceQuestInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     quest_id: int = Field(gt=0)
-    reason: str
+    state: Optional[QuestAdvanceState] = None
+    step_completed: Optional[int] = Field(default=None, ge=0)
+    finish_text: Optional[str] = None
+
+    @model_validator(mode="after")
+    def require_state_or_step(self):
+        if self.state is None and self.step_completed is None:
+            raise ValueError("Quest advancement requires a state or completed step.")
+        if self.step_completed is None:
+            if self.finish_text is not None:
+                raise ValueError("finish_text requires a completed step.")
+        elif self.finish_text is None or not self.finish_text.strip():
+            raise ValueError("A completed step requires non-empty finish_text.")
+        else:
+            self.finish_text = self.finish_text.strip()
+        return self
 
 
 class CreateNPCInput(BaseModel):

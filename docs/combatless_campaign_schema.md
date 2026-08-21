@@ -122,10 +122,14 @@ DM_ONLY:
 ```text
 UUID: <uuid>
 NAME: <name>
-INITIAL STATUS: hidden|available|active|finished
+INITIAL STATUS: hidden|available|active
 
 RELATIONSHIPS:
 <relation> | <entity_type> | <uuid>
+
+CONDITIONS:
+0 | <first completion condition>
+1 | <second completion condition>
 
 PUBLIC:
 <reveal-safe authored truth>
@@ -152,6 +156,10 @@ DM_ONLY:
 
 World lore has no status. Empty relationship, public, or DM-only sections are
 allowed, but an entity must contain some public or DM-only description.
+
+Every quest has at least one condition. Condition order is explicit, zero-based,
+and contiguous through the final step. Condition text is public because it is
+not authored under `DM_ONLY`.
 
 Relationship names use lowercase snake case. Allowed target types are
 `location`, `npc`, `quest`, and `world_lore`. Each target UUID must resolve to an
@@ -226,6 +234,36 @@ same current location can interact. When current locations differ, the AI uses
 the nested location hierarchy and established fiction to determine whether an
 interaction is possible.
 
+Mutable narrative relationships are directional and live on the source
+character or NPC inside both visibility branches of `state_json`:
+
+```json
+{
+  "public_info": {
+    "relationships": {
+      "character": {},
+      "npc": {"31": {"summary": "A trusted acquaintance."}},
+      "location": {}
+    }
+  },
+  "dm_only": {
+    "relationships": {
+      "character": {},
+      "npc": {"31": {"summary": "Some doubt remains."}},
+      "location": {}
+    }
+  }
+}
+```
+
+The relationship tool receives a source, target, and complete replacement
+objects for the public and DM-only entries. It derives the campaign from the
+current agent run, validates that both endpoints belong to it, and atomically
+replaces both entries. An empty object removes that visibility entry; two empty
+objects remove the relationship. Repeating the current values is a successful
+no-op. The AI does not supply a campaign ID, operation, or audit reason. The
+generic state-patch tools cannot modify the reserved `relationships` branch.
+
 ## Campaign Model
 
 `DndSession` owns the campaign and includes:
@@ -246,7 +284,11 @@ There can be at most one active campaign per user.
 All entity templates contain stable source identity, scenario version, active
 release state, source path, authored definition data, relationships, metadata,
 and embeddings. Entity instances contain mutable names or titles, status where
-applicable, current state, and runtime relationships.
+applicable, current state, and runtime relationships. Each quest template owns
+ordered condition templates containing a string. Each quest instance owns one
+condition instance per template condition plus a `steps_completed` counter.
+Condition instances begin as `not_finished`; completion changes them to
+`finished` and records a public `finish_text` describing what happened.
 
 Statuses are deliberately small:
 
@@ -312,17 +354,22 @@ Campaign creation is transactional and performs no embedding request:
 5. Create the `DndSession` with opening, known entities, and initialization
    DM-only instructions.
 6. Instantiate every location, NPC, quest, and world-lore chunk.
-7. Copy template definition state and convert template relationships to runtime
+7. Instantiate every quest condition in authored order.
+8. Copy template definition state and convert template relationships to runtime
    relationships.
-8. Force the configured main quest to `active`.
-9. Place all selected characters at the configured starting location.
-10. Instantiate their normalized abilities and one item row per unit of starting
+9. Force the configured main quest to `active`.
+10. Place all selected characters at the configured starting location.
+11. Instantiate their normalized abilities and one item row per unit of starting
     gear.
-11. Set the session's current location and main quest.
+12. Set the session's current location and main quest.
 
-Finishing any quest sets it to `finished`. Finishing the session's main quest
-also sets the campaign to `completed`. Completed and abandoned campaigns reject
-further mutations; a completed campaign is displayed read-only.
+Quest status advances one state at a time from `hidden` to `available` to
+`active`; it cannot regress or fail. A status transition may occur without
+completing a condition. Conditions may only be completed on an active quest and
+must be completed in exact zero-based order. Completing the final condition sets
+the quest to `finished`. Finishing the session's main quest also sets the
+campaign to `completed`. Completed and abandoned campaigns reject further
+mutations; a completed campaign is displayed read-only.
 
 ## Turn and Audit Tables
 
@@ -339,10 +386,15 @@ events.
 
 Implemented deterministic tools cover raw dice, checks, saves, contests,
 temporary roll modifiers, character and NPC movement, non-combat ability use,
-rest, item transfer/placement/consumption/state, visibility-state patches, and
-quest completion. Movement feasibility outside exact-location interaction is
-adjudicated by the AI; movement tools enforce identity, campaign ownership, and
-the resulting authoritative state change.
+rest, item transfer/placement/consumption/state, visibility-state patches,
+directional relationship replacement, and ordered quest advancement. Movement
+feasibility outside exact-location interaction is adjudicated by the AI;
+movement tools enforce identity, campaign ownership, and the resulting
+authoritative state change.
 
-Relationship mutation and quest advancement are intentionally not part of this
-tool contract yet and require separate design.
+`advance_quest` accepts a quest ID and at least one of an optional next `state`
+or optional zero-based `step_completed`. A completed step requires non-empty
+`finish_text`. The transaction locks the campaign, quest, and condition; checks
+campaign ownership, status, and exact order; updates the condition and counter;
+and performs final quest and campaign completion when applicable. The resulting
+world event stores condition text and `finish_text` in public state.

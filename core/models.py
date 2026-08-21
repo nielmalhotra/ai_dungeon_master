@@ -11,6 +11,25 @@ def empty_visibility_state():
     return {"public_info": {}, "dm_only": {}}
 
 
+def empty_relationship_state():
+    return {
+        "public_info": {
+            "relationships": {
+                "character": {},
+                "npc": {},
+                "location": {},
+            }
+        },
+        "dm_only": {
+            "relationships": {
+                "character": {},
+                "npc": {},
+                "location": {},
+            }
+        },
+    }
+
+
 def empty_initially_known_entities():
     return {
         "locations": [],
@@ -226,7 +245,7 @@ class CharacterInstance(models.Model):
         on_delete=models.SET_NULL,
         related_name="characters",
     )
-    state_json = models.JSONField(default=empty_visibility_state)
+    state_json = models.JSONField(default=empty_relationship_state)
     relationships_json = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -566,7 +585,7 @@ class NPCInstance(models.Model):
     )
     mechanics_json = models.JSONField(default=empty_npc_mechanics)
     modifiers_json = models.JSONField(default=empty_roll_modifiers)
-    state_json = models.JSONField(default=empty_visibility_state)
+    state_json = models.JSONField(default=empty_relationship_state)
     relationships_json = models.JSONField(default=list)
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
@@ -596,7 +615,6 @@ class QuestTemplate(models.Model):
         HIDDEN = "hidden", "Hidden"
         AVAILABLE = "available", "Available"
         ACTIVE = "active", "Active"
-        FINISHED = "finished", "Finished"
 
     definition_uuid = models.UUIDField()
     scenario_key = models.CharField(max_length=64)
@@ -644,6 +662,29 @@ class QuestTemplate(models.Model):
         return f"{self.title} ({self.scenario_key} v{self.version})"
 
 
+class QuestConditionTemplate(models.Model):
+    quest_template = models.ForeignKey(
+        QuestTemplate,
+        on_delete=models.CASCADE,
+        related_name="conditions",
+    )
+    order = models.PositiveIntegerField()
+    text = models.TextField()
+
+    class Meta:
+        db_table = "quest_condition_template"
+        ordering = ["quest_template", "order"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["quest_template", "order"],
+                name="uniq_quest_condition_tpl_order",
+            )
+        ]
+
+    def __str__(self):
+        return f"{self.quest_template.title} step {self.order}"
+
+
 class QuestInstance(models.Model):
     class Status(models.TextChoices):
         HIDDEN = "hidden", "Hidden"
@@ -669,7 +710,7 @@ class QuestInstance(models.Model):
         choices=Status.choices,
         default=Status.HIDDEN,
     )
-    current_stage = models.PositiveIntegerField(default=0)
+    steps_completed = models.PositiveIntegerField(default=0)
     relationships_json = models.JSONField(default=list)
     state_json = models.JSONField(default=empty_visibility_state)
     created_at = models.DateTimeField(auto_now_add=True)
@@ -693,6 +734,59 @@ class QuestInstance(models.Model):
 
     def __str__(self):
         return self.title
+
+
+class QuestConditionInstance(models.Model):
+    class Status(models.TextChoices):
+        NOT_FINISHED = "not_finished", "Not finished"
+        FINISHED = "finished", "Finished"
+
+    quest_instance = models.ForeignKey(
+        QuestInstance,
+        on_delete=models.CASCADE,
+        related_name="conditions",
+    )
+    template = models.ForeignKey(
+        QuestConditionTemplate,
+        on_delete=models.PROTECT,
+        related_name="instances",
+    )
+    status = models.CharField(
+        max_length=16,
+        choices=Status.choices,
+        default=Status.NOT_FINISHED,
+    )
+    finish_text = models.TextField(null=True, blank=True)
+    created_at = models.DateTimeField(auto_now_add=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = "quest_condition_instance"
+        ordering = ["quest_instance", "template__order"]
+        constraints = [
+            models.UniqueConstraint(
+                fields=["quest_instance", "template"],
+                name="uniq_quest_condition_instance_tpl",
+            ),
+            models.CheckConstraint(
+                check=(
+                    Q(status="not_finished", finish_text__isnull=True)
+                    | Q(status="finished", finish_text__isnull=False)
+                ),
+                name="quest_condition_finish_text_ck",
+            ),
+        ]
+
+    @property
+    def order(self):
+        return self.template.order
+
+    @property
+    def text(self):
+        return self.template.text
+
+    def __str__(self):
+        return f"{self.quest_instance.title} step {self.template.order}"
 
 
 class WorldLoreChunkTemplate(models.Model):

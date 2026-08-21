@@ -16,14 +16,13 @@ from django.urls import reverse
 
 from accounts.models import User as AppUser
 
-from .campaigns import finish_quest
 from .character_templates import (
     load_character_templates,
     load_item_templates,
     sync_character_templates,
     sync_gameplay_template_embeddings,
 )
-from .game_tools import execute_game_tool
+from .game_tools import GameToolError, execute_game_tool
 from .models import (
     AbilityInstance,
     AbilityTemplate,
@@ -37,6 +36,8 @@ from .models import (
     LocationInstance,
     LocationTemplate,
     NPCTemplate,
+    QuestConditionInstance,
+    QuestConditionTemplate,
     QuestInstance,
     QuestTemplate,
     Visibility,
@@ -144,6 +145,14 @@ class ScenarioSourceTests(TestCase):
         )
         self.assertEqual(quest.initial_status, "available")
         self.assertEqual(
+            quest.conditions,
+            (
+                "Discover credible evidence about the Night Blades' return.",
+                "Identify who is leading the Night Blades.",
+                "Uncover what the leader wants from Whitesparrow.",
+            ),
+        )
+        self.assertEqual(
             quest.relationships,
             (
                 SourceRelationship("involves", "npc", NPC_UUID),
@@ -207,6 +216,37 @@ class ScenarioSourceTests(TestCase):
                 initialization.read_text(encoding="utf-8").startswith(
                     "STARTING LOCATION:"
                 )
+            )
+
+    def test_quest_definition_renders_and_parses_ordered_conditions(self):
+        with TemporaryDirectory() as directory:
+            release_dir = Path(directory) / "v2"
+            target = create_definition_file(
+                release_dir=release_dir,
+                definition_type="quest",
+                filename="find_the_relic.txt",
+                name="Find the Relic",
+                initial_status="hidden",
+                conditions=(
+                    "Learn where the relic was taken.",
+                    "Recover the relic.",
+                ),
+                public_info="A missing relic must be recovered.",
+            )
+
+            parsed = parse_definition_file(target, allow_placeholder=True)
+
+            self.assertEqual(
+                parsed.conditions,
+                (
+                    "Learn where the relic was taken.",
+                    "Recover the relic.",
+                ),
+            )
+            self.assertIn(
+                "CONDITIONS:\n\n0 | Learn where the relic was taken.\n"
+                "1 | Recover the relic.",
+                target.read_text(encoding="utf-8"),
             )
 
     def test_relationship_must_reference_correct_entity_type(self):
@@ -361,6 +401,14 @@ class ScenarioSynchronizationTests(TestCase):
         location = LocationTemplate.objects.get(active=True)
         npc = NPCTemplate.objects.get(active=True)
         quest = QuestTemplate.objects.get(active=True)
+        self.assertEqual(
+            list(quest.conditions.values_list("order", "text")),
+            [
+                (0, "Discover credible evidence about the Night Blades' return."),
+                (1, "Identify who is leading the Night Blades."),
+                (2, "Uncover what the leader wants from Whitesparrow."),
+            ],
+        )
         self.assertEqual(npc.initial_location_template, location)
         self.assertEqual(
             npc.relationships_json,
@@ -389,7 +437,37 @@ class ScenarioSynchronizationTests(TestCase):
         self.assertEqual(LocationTemplate.objects.count(), 1)
         self.assertEqual(NPCTemplate.objects.count(), 1)
         self.assertEqual(QuestTemplate.objects.count(), 1)
+        self.assertEqual(QuestConditionTemplate.objects.count(), 3)
         self.assertEqual(WorldLoreChunkTemplate.objects.count(), 3)
+
+    def test_sync_backfills_conditions_for_an_unfinished_existing_quest(self):
+        synchronize_fixture()
+        user = AppUser.objects.create(email="existing-quest@example.com")
+        campaign = DndSession.objects.create(
+            user=user,
+            status=DndSession.Status.ACTIVE,
+            scenario_key="whitesparrow",
+            scenario_version=1,
+        )
+        template = QuestTemplate.objects.get(active=True)
+        quest = QuestInstance.objects.create(
+            dnd_session=campaign,
+            template=template,
+            title=template.title,
+            status=QuestInstance.Status.ACTIVE,
+        )
+        self.assertEqual(quest.conditions.count(), 0)
+
+        synchronize_fixture()
+
+        self.assertEqual(
+            list(quest.conditions.values_list("template__order", flat=True)),
+            [0, 1, 2],
+        )
+        self.assertEqual(
+            set(quest.conditions.values_list("status", flat=True)),
+            {QuestConditionInstance.Status.NOT_FINISHED},
+        )
 
 
 class CampaignCreationTests(TestCase):
@@ -444,6 +522,37 @@ class CampaignCreationTests(TestCase):
         self.assertEqual(campaign.current_location, location)
         self.assertEqual(campaign.main_quest, quest)
         self.assertEqual(quest.status, QuestInstance.Status.ACTIVE)
+        self.assertEqual(quest.steps_completed, 0)
+        self.assertEqual(
+            list(
+                quest.conditions.values_list(
+                    "template__order",
+                    "template__text",
+                    "status",
+                    "finish_text",
+                )
+            ),
+            [
+                (
+                    0,
+                    "Discover credible evidence about the Night Blades' return.",
+                    QuestConditionInstance.Status.NOT_FINISHED,
+                    None,
+                ),
+                (
+                    1,
+                    "Identify who is leading the Night Blades.",
+                    QuestConditionInstance.Status.NOT_FINISHED,
+                    None,
+                ),
+                (
+                    2,
+                    "Uncover what the leader wants from Whitesparrow.",
+                    QuestConditionInstance.Status.NOT_FINISHED,
+                    None,
+                ),
+            ],
+        )
         self.assertEqual(npc.current_location, location)
         self.assertTrue(npc.state_json["public_info"])
         self.assertTrue(npc.state_json["dm_only"])
@@ -481,6 +590,11 @@ class CampaignCreationTests(TestCase):
         ):
             self.assertEqual(warrior.mechanics_json[field], original_warrior[field])
         self.assertEqual(warrior.current_location, location)
+        for visibility in ("public_info", "dm_only"):
+            self.assertEqual(
+                set(warrior.state_json[visibility]["relationships"]),
+                {"character", "npc", "location"},
+            )
         self.assertEqual(
             set(warrior.abilities.values_list("template__ability_key", flat=True)),
             {ability["key"] for ability in original_warrior["abilities"]},
@@ -503,22 +617,6 @@ class CampaignCreationTests(TestCase):
 
         self.assertContains(response, "The adventure begins")
         self.assertContains(response, "Light rain falls")
-
-    def test_main_quest_finish_completes_and_locks_campaign(self):
-        self.create_campaign_through_view()
-        campaign = DndSession.objects.get(status=DndSession.Status.ACTIVE)
-
-        completed = finish_quest(campaign.main_quest)
-
-        self.assertTrue(completed)
-        campaign.refresh_from_db()
-        campaign.main_quest.refresh_from_db()
-        self.assertEqual(campaign.status, DndSession.Status.COMPLETED)
-        self.assertEqual(campaign.main_quest.status, QuestInstance.Status.FINISHED)
-        response = self.client.get(reverse("home"))
-        self.assertContains(response, "Adventure complete")
-        self.assertContains(response, "completed adventure is read-only")
-        self.assertNotContains(response, 'id="open-quit-session"')
 
     def test_quit_abandons_only_current_users_campaign(self):
         self.create_campaign_through_view()
@@ -817,7 +915,195 @@ class DeterministicGameToolTests(TestCase):
         self.assertTrue(consumed.world_event_id)
         self.assertEqual(torch.status, ItemInstance.Status.CONSUMED)
 
-    def test_entity_state_and_quest_completion_use_validated_tools(self):
+    def test_relationship_updates_replace_public_and_dm_state(self):
+        warrior = self.campaign.characters.get(name="Alden")
+        npc = self.campaign.npcs.get()
+        first = self.call_tool(
+            "relationship-first",
+            "update_relationship",
+            {
+                "entity_to_update": {"type": "character", "id": warrior.id},
+                "target": {"type": "npc", "id": npc.id},
+                "public_info_json": {
+                    "summary": "Alden considers the sheriff a useful ally.",
+                    "standing": "trusted",
+                },
+                "dm_only_json": {
+                    "concern": "Alden still doubts the sheriff's evidence."
+                },
+            },
+        )
+        warrior.refresh_from_db()
+        target_key = str(npc.id)
+        self.assertEqual(
+            warrior.state_json["public_info"]["relationships"]["npc"][
+                target_key
+            ]["standing"],
+            "trusted",
+        )
+        self.assertEqual(
+            warrior.state_json["dm_only"]["relationships"]["npc"][target_key],
+            {"concern": "Alden still doubts the sheriff's evidence."},
+        )
+        first_event = self.turn.world_events.get(pk=first.world_event_id)
+        self.assertEqual(
+            first_event.state_json["public_info"]["current_relationship"][
+                "standing"
+            ],
+            "trusted",
+        )
+
+        replacement = self.call_tool(
+            "relationship-replacement",
+            "update_relationship",
+            {
+                "entity_to_update": {"type": "character", "id": warrior.id},
+                "target": {"type": "npc", "id": npc.id},
+                "public_info_json": {
+                    "summary": "Alden now considers the sheriff a friend."
+                },
+                "dm_only_json": {},
+            },
+        )
+        warrior.refresh_from_db()
+        self.assertEqual(
+            warrior.state_json["public_info"]["relationships"]["npc"][target_key],
+            {"summary": "Alden now considers the sheriff a friend."},
+        )
+        self.assertEqual(
+            warrior.state_json["dm_only"]["relationships"]["npc"],
+            {},
+        )
+        self.assertTrue(replacement.data["changed"])
+        self.assertFalse(replacement.data["removed"])
+
+        removed = self.call_tool(
+            "relationship-removal",
+            "update_relationship",
+            {
+                "entity_to_update": {"type": "character", "id": warrior.id},
+                "target": {"type": "npc", "id": npc.id},
+                "public_info_json": {},
+                "dm_only_json": {},
+            },
+        )
+        warrior.refresh_from_db()
+        self.assertEqual(
+            warrior.state_json["public_info"]["relationships"]["npc"],
+            {},
+        )
+        self.assertTrue(removed.data["removed"])
+
+    def test_relationship_target_is_scoped_to_the_tool_session(self):
+        warrior = self.campaign.characters.get(name="Alden")
+        other_user = AppUser.objects.create(email="other-tools@example.com")
+        other_campaign = DndSession.objects.create(user=other_user)
+        other_location = LocationInstance.objects.create(
+            dnd_session=other_campaign,
+            name="Another Campaign's Farmhouse",
+        )
+
+        with self.assertRaises(GameToolError):
+            self.call_tool(
+                "cross-campaign-relationship",
+                "update_relationship",
+                {
+                    "entity_to_update": {
+                        "type": "character",
+                        "id": warrior.id,
+                    },
+                    "target": {"type": "location", "id": other_location.id},
+                    "public_info_json": {"summary": "Should not be reachable."},
+                    "dm_only_json": {},
+                },
+            )
+
+    def test_advance_quest_changes_state_and_completes_a_side_quest(self):
+        template = QuestTemplate.objects.create(
+            definition_uuid=uuid4(),
+            scenario_key="whitesparrow",
+            version=1,
+            active=False,
+            source_file="quests/help_the_sheriff.txt",
+            title="Help the Sheriff",
+            initial_status=QuestTemplate.InitialStatus.HIDDEN,
+        )
+        condition_template = QuestConditionTemplate.objects.create(
+            quest_template=template,
+            order=0,
+            text="Give the sheriff credible evidence.",
+        )
+        quest = QuestInstance.objects.create(
+            dnd_session=self.campaign,
+            template=template,
+            title=template.title,
+            status=QuestInstance.Status.HIDDEN,
+        )
+        condition = QuestConditionInstance.objects.create(
+            quest_instance=quest,
+            template=condition_template,
+        )
+
+        available = self.call_tool(
+            "side-quest-available",
+            "advance_quest",
+            {"quest_id": quest.id, "state": "available"},
+        )
+        quest.refresh_from_db()
+        self.assertEqual(quest.status, QuestInstance.Status.AVAILABLE)
+        self.assertIsNone(available.data["step_completed"])
+
+        completed = self.call_tool(
+            "side-quest-completed",
+            "advance_quest",
+            {
+                "quest_id": quest.id,
+                "state": "active",
+                "step_completed": 0,
+                "finish_text": "The party gave Ruth the captured ledger.",
+            },
+        )
+
+        quest.refresh_from_db()
+        condition.refresh_from_db()
+        self.campaign.refresh_from_db()
+        self.assertEqual(quest.status, QuestInstance.Status.FINISHED)
+        self.assertEqual(quest.steps_completed, 1)
+        self.assertEqual(condition.status, QuestConditionInstance.Status.FINISHED)
+        self.assertEqual(
+            condition.finish_text,
+            "The party gave Ruth the captured ledger.",
+        )
+        self.assertFalse(completed.data["campaign_completed"])
+        self.assertEqual(self.campaign.status, DndSession.Status.ACTIVE)
+        event = self.turn.world_events.get(pk=completed.world_event_id)
+        self.assertEqual(
+            event.state_json["public_info"]["finish_text"],
+            "The party gave Ruth the captured ledger.",
+        )
+        self.assertEqual(event.state_json["dm_only"], {})
+
+    def test_advance_quest_requires_the_next_zero_based_step(self):
+        with self.assertRaisesRegex(GameToolError, "next quest step is 0"):
+            self.call_tool(
+                "skip-main-quest-step",
+                "advance_quest",
+                {
+                    "quest_id": self.campaign.main_quest_id,
+                    "step_completed": 1,
+                    "finish_text": "This step cannot be completed first.",
+                },
+            )
+
+        self.campaign.main_quest.refresh_from_db()
+        self.assertEqual(self.campaign.main_quest.steps_completed, 0)
+        self.assertFalse(
+            self.campaign.main_quest.conditions.filter(
+                status=QuestConditionInstance.Status.FINISHED
+            ).exists()
+        )
+
+    def test_entity_state_and_quest_advancement_use_validated_tools(self):
         npc = self.campaign.npcs.get()
         updated = self.call_tool(
             "npc-state",
@@ -835,17 +1121,49 @@ class DeterministicGameToolTests(TestCase):
         self.assertEqual(npc.state_json["public_info"]["mood"], "relieved")
         self.assertTrue(updated.world_event_id)
 
-        finished = self.call_tool(
-            "finish-main-quest",
-            "finish_quest",
-            {
-                "quest_id": self.campaign.main_quest_id,
-                "reason": "The party discovered the leader and motive.",
-            },
+        finish_texts = (
+            "The party recovered a ledger proving the Night Blades returned.",
+            "The ledger and Ruth's testimony identified the masked Night Lord.",
+            "The party uncovered the Night Lord's plan for Whitesparrow.",
         )
+        for step_completed, finish_text in enumerate(finish_texts):
+            finished = self.call_tool(
+                f"advance-main-quest-{step_completed}",
+                "advance_quest",
+                {
+                    "quest_id": self.campaign.main_quest_id,
+                    "step_completed": step_completed,
+                    "finish_text": finish_text,
+                },
+            )
+
         self.campaign.refresh_from_db()
+        self.campaign.main_quest.refresh_from_db()
         self.assertTrue(finished.data["campaign_completed"])
         self.assertEqual(self.campaign.status, DndSession.Status.COMPLETED)
+        self.assertEqual(
+            self.campaign.main_quest.status,
+            QuestInstance.Status.FINISHED,
+        )
+        self.assertEqual(self.campaign.main_quest.steps_completed, 3)
+        self.assertEqual(
+            list(
+                self.campaign.main_quest.conditions.values_list(
+                    "finish_text", flat=True
+                )
+            ),
+            list(finish_texts),
+        )
+        final_event = self.turn.world_events.get(pk=finished.world_event_id)
+        self.assertEqual(final_event.event_type, "quest_finished")
+        self.assertEqual(
+            final_event.state_json["public_info"]["finish_text"],
+            finish_texts[-1],
+        )
+        response = self.client.get(reverse("home"))
+        self.assertContains(response, "Adventure complete")
+        self.assertContains(response, "completed adventure is read-only")
+        self.assertNotContains(response, 'id="open-quit-session"')
 
 
 class ExistingInterfaceTests(TestCase):

@@ -1,7 +1,18 @@
 import core.models
+from copy import deepcopy
 from django.db import migrations, models
 import django.db.models.deletion
 import pgvector.django.vector
+
+
+def with_relationship_buckets(state):
+    state = deepcopy(state or {})
+    for visibility in ("public_info", "dm_only"):
+        branch = state.setdefault(visibility, {})
+        relationships = branch.setdefault("relationships", {})
+        for entity_type in ("character", "npc", "location"):
+            relationships.setdefault(entity_type, {})
+    return state
 
 
 def backfill_gameplay_templates_and_instances(apps, schema_editor):
@@ -64,15 +75,21 @@ def backfill_gameplay_templates_and_instances(apps, schema_editor):
     for character in CharacterInstance.objects.using(alias).all():
         mechanics_json = dict(character.mechanics_json or {})
         template_json = dict(character.template_json or {})
+        state_json = with_relationship_buckets(character.state_json)
         mechanics_json.pop("conditions", None)
         template_json.pop("conditions", None)
-        if (
-            mechanics_json != character.mechanics_json
-            or template_json != character.template_json
-        ):
+        update_fields = []
+        if mechanics_json != character.mechanics_json:
             character.mechanics_json = mechanics_json
+            update_fields.append("mechanics_json")
+        if template_json != character.template_json:
             character.template_json = template_json
-            character.save(update_fields=["mechanics_json", "template_json"])
+            update_fields.append("template_json")
+        if state_json != character.state_json:
+            character.state_json = state_json
+            update_fields.append("state_json")
+        if update_fields:
+            character.save(update_fields=update_fields)
 
         character_template = templates_by_class.get(
             character.template_json.get("class")
@@ -107,9 +124,16 @@ def backfill_gameplay_templates_and_instances(apps, schema_editor):
                 )
 
     for npc in NPCInstance.objects.using(alias).select_related("template"):
+        update_fields = []
         if npc.template_id:
             npc.mechanics_json = npc.template.mechanics_json
-            npc.save(update_fields=["mechanics_json"])
+            update_fields.append("mechanics_json")
+        state_json = with_relationship_buckets(npc.state_json)
+        if state_json != npc.state_json:
+            npc.state_json = state_json
+            update_fields.append("state_json")
+        if update_fields:
+            npc.save(update_fields=update_fields)
 
 
 class Migration(migrations.Migration):
@@ -140,6 +164,11 @@ class Migration(migrations.Migration):
             name="modifiers_json",
             field=models.JSONField(default=core.models.empty_roll_modifiers),
         ),
+        migrations.AlterField(
+            model_name="characterinstance",
+            name="state_json",
+            field=models.JSONField(default=core.models.empty_relationship_state),
+        ),
         migrations.AddField(
             model_name="npcinstance",
             name="mechanics_json",
@@ -149,6 +178,11 @@ class Migration(migrations.Migration):
             model_name="npcinstance",
             name="modifiers_json",
             field=models.JSONField(default=core.models.empty_roll_modifiers),
+        ),
+        migrations.AlterField(
+            model_name="npcinstance",
+            name="state_json",
+            field=models.JSONField(default=core.models.empty_relationship_state),
         ),
         migrations.AddField(
             model_name="npctemplate",

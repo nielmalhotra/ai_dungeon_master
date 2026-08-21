@@ -84,8 +84,9 @@ activates the location, NPC, quest, and world-lore templates for that release.
 Previous versions remain available but inactive. Creating a game performs no
 OpenAI request: it instantiates the active release, resolves runtime relationships,
 copies the opening and known-entity initialization, activates the main quest, and
-pins the campaign to that exact version. Finishing the main quest completes the
-campaign and makes it read-only.
+pins the campaign to that exact version. Quests advance through authored,
+zero-based conditions in order. Completing the final main-quest condition
+completes the campaign and makes it read-only.
 
 The complete source grammar, status values, visibility semantics, relationship
 shape, and initialization behavior are documented in

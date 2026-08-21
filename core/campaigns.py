@@ -11,6 +11,7 @@ from .models import (
     LocationTemplate,
     NPCInstance,
     NPCTemplate,
+    QuestConditionInstance,
     QuestInstance,
     QuestTemplate,
     WorldLore,
@@ -27,8 +28,14 @@ class ScenarioNotReadyError(CampaignCreationError):
     pass
 
 
-class CampaignNotActiveError(RuntimeError):
-    pass
+def _state_with_relationship_buckets(state):
+    state = deepcopy(state)
+    for visibility in ("public_info", "dm_only"):
+        branch = state.setdefault(visibility, {})
+        relationships = branch.setdefault("relationships", {})
+        for entity_type in ("character", "npc", "location"):
+            relationships.setdefault(entity_type, {})
+    return state
 
 
 def _active_scenario_templates(scenario_key):
@@ -49,7 +56,9 @@ def _active_scenario_templates(scenario_key):
             QuestTemplate.objects.filter(
                 scenario_key=scenario_key,
                 active=True,
-            ).order_by("id")
+            )
+            .prefetch_related("conditions")
+            .order_by("id")
         ),
         "world_lore": list(
             WorldLoreChunkTemplate.objects.filter(
@@ -102,12 +111,23 @@ def _templates_by_definition(templates):
 
 def _verify_release_matches_templates(release, templates_by_definition):
     for definition in release.definitions:
-        if not templates_by_definition.get(
+        matching_templates = templates_by_definition.get(
             (definition.definition_type, definition.definition_uuid)
-        ):
+        )
+        if not matching_templates:
             raise ScenarioNotReadyError(
                 f"Active templates are missing {definition.source_file}."
             )
+        if definition.definition_type == "quest":
+            actual_conditions = tuple(
+                matching_templates[0]
+                .conditions.order_by("order")
+                .values_list("text", flat=True)
+            )
+            if actual_conditions != definition.conditions:
+                raise ScenarioNotReadyError(
+                    f"Active templates do not match {definition.source_file}."
+                )
     expected_definitions = {
         (definition.definition_type, definition.definition_uuid)
         for definition in release.definitions
@@ -211,7 +231,7 @@ def create_campaign(
                 else None
             ),
             status=template.initial_status,
-            state_json=deepcopy(template.definition_json),
+            state_json=_state_with_relationship_buckets(template.definition_json),
             mechanics_json=deepcopy(template.mechanics_json),
         )
 
@@ -231,6 +251,16 @@ def create_campaign(
             ),
             state_json=deepcopy(template.definition_json),
         )
+    QuestConditionInstance.objects.bulk_create(
+        [
+            QuestConditionInstance(
+                quest_instance=quests_by_template[template.id],
+                template=condition_template,
+            )
+            for template in templates["quests"]
+            for condition_template in template.conditions.all()
+        ]
+    )
 
     lore_by_template = {}
     for template in templates["world_lore"]:
@@ -284,6 +314,7 @@ def create_campaign(
             template_json=deepcopy(template.character_template),
             mechanics_json=mechanics,
             current_location=starting_location,
+            state_json=_state_with_relationship_buckets({}),
             relationships_json=[
                 {
                     "relation": "located_in",
@@ -326,24 +357,6 @@ def create_campaign(
         update_fields=["current_location", "main_quest", "updated_at"]
     )
     return campaign
-
-
-@transaction.atomic
-def finish_quest(quest):
-    quest = QuestInstance.objects.select_for_update().select_related(
-        "dnd_session"
-    ).get(pk=quest.pk)
-    campaign = DndSession.objects.select_for_update().get(
-        pk=quest.dnd_session_id
-    )
-    if campaign.status != DndSession.Status.ACTIVE:
-        raise CampaignNotActiveError("The campaign no longer accepts changes.")
-    quest.status = QuestInstance.Status.FINISHED
-    quest.save(update_fields=["status", "updated_at"])
-    if campaign.main_quest_id == quest.id:
-        campaign.status = DndSession.Status.COMPLETED
-        campaign.save(update_fields=["status", "updated_at"])
-    return campaign.status == DndSession.Status.COMPLETED
 
 
 @transaction.atomic
